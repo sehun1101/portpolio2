@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>마도제국 방어전 (Magitech RTS)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden; /* 스크롤 방지 */
+      background-color: #1a202c; /* 다크 테마 배경 */
+      user-select: none; /* 텍스트 선택 방지 */
+      font-family: 'Pretendard', sans-serif;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    /* 우클릭 메뉴 방지 */
+    * { -webkit-touch-callout: none; }
+    
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+    }
+    
+    .btn-action {
+      transition: all 0.2s;
+    }
+    .btn-action:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+    }
+    .btn-action:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      filter: grayscale(100%);
+    }
+  </style>
+</head>
+<body oncontextmenu="return false;">
+
+  <!-- 상단 UI (자원 및 상태) -->
+  <div class="fixed top-0 left-0 w-full p-4 pointer-events-none flex justify-between items-start z-10">
+    <div class="glass-panel p-5 rounded-xl pointer-events-auto min-w-[250px]">
+      <h1 class="text-2xl font-bold mb-3 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+        마도제국: 최후의 요새
+      </h1>
+      <div class="flex flex-col gap-2 text-lg font-semibold text-gray-200">
+        <div class="flex justify-between items-center">
+          <span>💰 군자금:</span>
+          <span id="goldDisplay" class="text-yellow-400">200</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span>🔮 마나 코어:</span>
+          <span id="manaDisplay" class="text-purple-400">0</span>
+        </div>
+      </div>
+      <div class="mt-4 pt-3 border-t border-gray-700 text-sm text-gray-400" id="hqStatus">
+        사령부 내구도: 100%
+      </div>
+    </div>
+
+    <div class="glass-panel p-4 rounded-xl text-center min-w-[150px]">
+      <p class="text-gray-400 text-sm mb-1">방어 시간</p>
+      <p id="timeDisplay" class="text-2xl font-mono text-white">00:00</p>
+    </div>
+  </div>
+
+  <!-- 하단 UI (건설 및 훈련 메뉴) -->
+  <div class="fixed bottom-0 left-0 w-full p-6 pointer-events-none flex justify-center z-10">
+    <div class="glass-panel p-4 rounded-2xl pointer-events-auto flex flex-wrap justify-center gap-4 max-w-4xl">
+      
+      <!-- 건설 섹션 -->
+      <div class="flex flex-col gap-2 border-r border-gray-700 pr-4">
+        <span class="text-xs text-gray-400 font-bold tracking-wider">건설 (BUILD)</span>
+        <div class="flex gap-2">
+          <button id="btnRefinery" onclick="game.setBuildMode('refinery')" class="btn-action bg-purple-900/50 border border-purple-500 text-purple-200 px-4 py-2 rounded font-medium text-sm flex flex-col items-center">
+            <span>마나 추출기</span>
+            <span class="text-xs text-gray-400 mt-1">100G</span>
+          </button>
+          <button id="btnBarracks" onclick="game.setBuildMode('barracks')" class="btn-action bg-blue-900/50 border border-blue-500 text-blue-200 px-4 py-2 rounded font-medium text-sm flex flex-col items-center">
+            <span>마도 병영</span>
+            <span class="text-xs text-gray-400 mt-1">150G</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 훈련 섹션 -->
+      <div class="flex flex-col gap-2 pl-2">
+        <span class="text-xs text-gray-400 font-bold tracking-wider">병력 훈련 (TRAIN)</span>
+        <div class="flex gap-2">
+          <button id="btnKnight" onclick="game.trainUnit('knight')" class="btn-action bg-gray-700/80 border border-gray-400 text-white px-4 py-2 rounded font-medium text-sm flex flex-col items-center">
+            <span>강철 기사 (근접)</span>
+            <span class="text-xs text-gray-400 mt-1">50G | 10M</span>
+          </button>
+          <button id="btnRifleman" onclick="game.trainUnit('rifleman')" class="btn-action bg-cyan-900/50 border border-cyan-400 text-cyan-100 px-4 py-2 rounded font-medium text-sm flex flex-col items-center">
+            <span>마도 소총수 (원거리)</span>
+            <span class="text-xs text-gray-400 mt-1">40G | 30M</span>
+          </button>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+
+  <!-- 게임 오버 화면 -->
+  <div id="gameOverScreen" class="fixed inset-0 bg-black/80 z-50 hidden flex-col items-center justify-center pointer-events-auto">
+    <h2 class="text-5xl font-bold text-red-500 mb-4">사령부 파괴됨</h2>
+    <p class="text-xl text-gray-300 mb-8">마도제국의 방어선이 무너졌습니다.</p>
+    <p class="text-lg text-white mb-8">생존 시간: <span id="finalTime" class="font-bold text-blue-400"></span></p>
+    <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold text-lg transition-colors">
+      재시도 (다시 고통받기)
+    </button>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // 화면 크기 맞춤
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // --- 게임 유틸리티 ---
+    function getDistance(x1, y1, x2, y2) {
+      return Math.hypot(x2 - x1, y2 - y1);
+    }
+
+    // --- 게임 상태 및 객체 정의 ---
+    class Game {
+      constructor() {
+        this.lastTime = performance.now();
+        this.timeElapsed = 0; // 게임 진행 시간 (초)
+        this.resources = { gold: 200, mana: 0 };
+        this.resourceTick = 0;
+
+        this.buildings = [];
+        this.units = [];
+        this.enemies = [];
+        this.projectiles = [];
+        this.particles = [];
+        this.floatingTexts = [];
+
+        this.isGameOver = false;
+        
+        // 입력 상태
+        this.mouse = { x: 0, y: 0 };
+        this.selectionBox = null; // {startX, startY, endX, endY}
+        this.selectedUnits = [];
+        this.buildMode = null; // 'refinery' | 'barracks' | null
+
+        // 사령부(HQ) 생성 (화면 중앙)
+        this.hq = new Building(canvas.width / 2, canvas.height / 2, 'hq');
+        this.buildings.push(this.hq);
+
+        this.enemySpawnTimer = 0;
+        this.enemySpawnInterval = 5000; // 초기 스폰 5초마다
+
+        this.initInputHandlers();
+      }
+
+      initInputHandlers() {
+        canvas.addEventListener('mousemove', (e) => {
+          this.mouse.x = e.clientX;
+          this.mouse.y = e.clientY;
+          if (this.selectionBox) {
+            this.selectionBox.endX = e.clientX;
+            this.selectionBox.endY = e.clientY;
+          }
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+          if (this.isGameOver) return;
+          
+          if (e.button === 0) { // 좌클릭
+            if (this.buildMode) {
+              this.placeBuilding(this.mouse.x, this.mouse.y);
+            } else {
+              // 드래그 선택 시작
+              this.selectionBox = { startX: e.clientX, startY: e.clientY, endX: e.clientX, endY: e.clientY };
+            }
+          } else if (e.button === 2) { // 우클릭
+            if (this.buildMode) {
+              this.buildMode = null; // 건설 취소
+            } else if (this.selectedUnits.length > 0) {
+              this.issueCommand(e.clientX, e.clientY);
+            }
+          }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+          if (e.button === 0 && this.selectionBox) { // 좌클릭 해제
+            this.executeSelection();
+            this.selectionBox = null;
+          }
+        });
+      }
+
+      setBuildMode(type) {
+        let cost = type === 'refinery' ? 100 : 150;
+        if (this.resources.gold >= cost) {
+          this.buildMode = type;
+        } else {
+          this.addFloatingText("군자금이 부족합니다!", canvas.width/2, canvas.height/2 - 100, '#ef4444');
+        }
+      }
+
+      placeBuilding(x, y) {
+        let cost = this.buildMode === 'refinery' ? 100 : 150;
+        // 다른 건물과의 충돌 체크 (단순 반경)
+        let canPlace = true;
+        for (let b of this.buildings) {
+          if (getDistance(x, y, b.x, b.y) < b.radius + 40) canPlace = false;
+        }
+
+        if (canPlace && this.resources.gold >= cost) {
+          this.resources.gold -= cost;
+          this.buildings.push(new Building(x, y, this.buildMode));
+          this.addFloatingText("-"+cost+"G", x, y, '#eab308');
+          this.buildMode = null;
+          this.updateUI();
+        } else if (!canPlace) {
+          this.addFloatingText("건설할 수 없는 위치입니다.", x, y, '#ef4444');
+        }
+      }
+
+      trainUnit(type) {
+        let costGold = type === 'knight' ? 50 : 40;
+        let costMana = type === 'knight' ? 10 : 30;
+        
+        let barracksList = this.buildings.filter(b => b.type === 'barracks');
+        if (barracksList.length === 0) {
+          this.addFloatingText("마도 병영이 필요합니다!", canvas.width/2, canvas.height/2, '#ef4444');
+          return;
+        }
+
+        if (this.resources.gold >= costGold && this.resources.mana >= costMana) {
+          this.resources.gold -= costGold;
+          this.resources.mana -= costMana;
+          
+          // 랜덤 병영에서 소환
+          let b = barracksList[Math.floor(Math.random() * barracksList.length)];
+          // 약간 아래쪽에서 생성
+          this.units.push(new Unit(b.x, b.y + 60, type));
+          this.addFloatingText("훈련 완료", b.x, b.y + 80, '#3b82f6');
+          this.updateUI();
+        } else {
+          this.addFloatingText("자원이 부족합니다!", canvas.width/2, canvas.height/2, '#ef4444');
+        }
+      }
+
+      executeSelection() {
+        let box = this.selectionBox;
+        let minX = Math.min(box.startX, box.endX);
+        let maxX = Math.max(box.startX, box.endX);
+        let minY = Math.min(box.startY, box.endY);
+        let maxY = Math.max(box.startY, box.endY);
+
+        this.selectedUnits = [];
+        // 단순 클릭인지 박스 드래그인지 확인
+        let isClick = Math.abs(maxX - minX) < 5 && Math.abs(maxY - minY) < 5;
+
+        for (let u of this.units) {
+          u.selected = false;
+          if (isClick) {
+            if (getDistance(u.x, u.y, this.mouse.x, this.mouse.y) < u.radius + 5) {
+              this.selectedUnits.push(u);
+              u.selected = true;
+            }
+          } else {
+            if (u.x >= minX && u.x <= maxX && u.y >= minY && u.y <= maxY) {
+              this.selectedUnits.push(u);
+              u.selected = true;
+            }
+          }
+        }
+        
+        // 클릭인데 유닛을 못 잡았다면 단일 선택 로직으로 한 번 더 확인 (가장 가까운 유닛)
+        if (isClick && this.selectedUnits.length === 0) {
+           let closest = null;
+           let minDist = 20;
+           for(let u of this.units) {
+              let d = getDistance(u.x, u.y, this.mouse.x, this.mouse.y);
+              if(d < minDist) { minDist = d; closest = u; }
+           }
+           if(closest) {
+             closest.selected = true;
+             this.selectedUnits.push(closest);
+           }
+        }
+      }
+
+      issueCommand(targetX, targetY) {
+        // 적을 클릭했는지 확인
+        let targetEnemy = null;
+        for (let e of this.enemies) {
+          if (getDistance(e.x, e.y, targetX, targetY) < e.radius + 15) {
+            targetEnemy = e;
+            break;
+          }
+        }
+
+        // 포메이션을 위한 간단한 오프셋 계산 (부대 이동)
+        let cols = Math.ceil(Math.sqrt(this.selectedUnits.length));
+        let spacing = 30;
+
+        this.selectedUnits.forEach((u, index) => {
+          if (targetEnemy) {
+            u.targetEnemy = targetEnemy;
+            u.state = 'attack';
+          } else {
+            // 위치 분산
+            let row = Math.floor(index / cols);
+            let col = index % cols;
+            let ox = (col - cols/2) * spacing;
+            let oy = (row - cols/2) * spacing;
+            
+            u.targetPos = { x: targetX + ox, y: targetY + oy };
+            u.targetEnemy = null;
+            u.state = 'move';
+            
+            // 이동 클릭 이펙트
+            if(index === 0) this.createClickEffect(targetX, targetY);
+          }
+        });
+      }
+
+      createClickEffect(x, y) {
+        this.particles.push({
+          x: x, y: y, life: 1, maxLife: 1, type: 'click'
+        });
+      }
+
+      addFloatingText(text, x, y, color) {
+        this.floatingTexts.push({ text, x, y, color, life: 1.5 });
+      }
+
+      update(dt) {
+        if (this.isGameOver) return;
+
+        this.timeElapsed += dt;
+        this.resourceTick += dt;
+
+        // 자원 생산 (1초마다)
+        if (this.resourceTick >= 1) {
+          this.resources.gold += 2; // 사령부 기본 수입
+          let refCount = this.buildings.filter(b => b.type === 'refinery').length;
+          this.resources.mana += refCount * 2;
+          this.resourceTick = 0;
+          this.updateUI();
+        }
+
+        // 적 스폰
+        this.enemySpawnTimer += dt * 1000;
+        // 시간이 지날수록 스폰 쿨타임 감소
+        let currentSpawnInterval = Math.max(1000, this.enemySpawnInterval - (this.timeElapsed * 10)); 
+        
+        if (this.enemySpawnTimer >= currentSpawnInterval) {
+          this.spawnEnemy();
+          this.enemySpawnTimer = 0;
+        }
+
+        // 객체 업데이트
+        this.buildings.forEach(b => b.update(dt));
+        this.units.forEach(u => u.update(dt, this));
+        this.enemies.forEach(e => e.update(dt, this));
+        
+        // 투사체 업데이트
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+          let p = this.projectiles[i];
+          p.update(dt);
+          if (p.life <= 0) this.projectiles.splice(i, 1);
+        }
+
+        // 파티클 업데이트
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          let p = this.particles[i];
+          p.life -= dt;
+          if(p.type !== 'click') {
+            p.x += p.vx * dt; p.y += p.vy * dt;
+          }
+          if (p.life <= 0) this.particles.splice(i, 1);
+        }
+
+        // 플로팅 텍스트 업데이트
+        for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+          let ft = this.floatingTexts[i];
+          ft.life -= dt;
+          ft.y -= 20 * dt;
+          if (ft.life <= 0) this.floatingTexts.splice(i, 1);
+        }
+
+        // 사망 처리 및 제거
+        this.units = this.units.filter(u => u.hp > 0);
+        this.enemies = this.enemies.filter(e => {
+          if (e.hp <= 0) {
+            this.resources.gold += e.reward; // 처치 보상
+            this.addFloatingText("+"+e.reward+"G", e.x, e.y, '#eab308');
+            this.updateUI();
+            
+            // 폭발 파티클
+            for(let k=0; k<10; k++) {
+              this.particles.push({
+                x: e.x, y: e.y,
+                vx: (Math.random()-0.5)*100, vy: (Math.random()-0.5)*100,
+                life: 0.5 + Math.random()*0.5, color: '#ef4444'
+              });
+            }
+            return false;
+          }
+          return true;
+        });
+        
+        let oldBCount = this.buildings.length;
+        this.buildings = this.buildings.filter(b => b.hp > 0);
+        
+        // 사령부 파괴 확인
+        if (this.hq.hp <= 0 && !this.isGameOver) {
+          this.gameOver();
+        }
+      }
+
+      spawnEnemy() {
+        let side = Math.floor(Math.random() * 4);
+        let ex, ey;
+        let margin = 50;
+        if(side === 0) { ex = Math.random() * canvas.width; ey = -margin; } // 상
+        else if(side === 1) { ex = canvas.width + margin; ey = Math.random() * canvas.height; } // 우
+        else if(side === 2) { ex = Math.random() * canvas.width; ey = canvas.height + margin; } // 하
+        else { ex = -margin; ey = Math.random() * canvas.height; } // 좌
+        
+        // 시간에 따른 적 스탯 스케일링
+        let difficultyMultiplier = 1 + (this.timeElapsed / 60); // 1분마다 2배
+        
+        let typeRand = Math.random();
+        let type = 'merc'; // 용병(근접)
+        if (typeRand > 0.6) type = 'drone'; // 마공학 드론(원거리)
+        if (this.timeElapsed > 60 && typeRand > 0.9) type = 'golem'; // 보스급(1분 후)
+
+        this.enemies.push(new Enemy(ex, ey, type, difficultyMultiplier));
+      }
+
+      updateUI() {
+        document.getElementById('goldDisplay').innerText = Math.floor(this.resources.gold);
+        document.getElementById('manaDisplay').innerText = Math.floor(this.resources.mana);
+        
+        let min = Math.floor(this.timeElapsed / 60).toString().padStart(2, '0');
+        let sec = Math.floor(this.timeElapsed % 60).toString().padStart(2, '0');
+        document.getElementById('timeDisplay').innerText = `${min}:${sec}`;
+
+        let hqPercent = Math.max(0, Math.floor((this.hq.hp / this.hq.maxHp) * 100));
+        let hqStatusEl = document.getElementById('hqStatus');
+        hqStatusEl.innerText = `사령부 내구도: ${hqPercent}%`;
+        if (hqPercent < 30) hqStatusEl.className = "mt-4 pt-3 border-t border-gray-700 font-bold text-red-500 animate-pulse";
+
+        // 버튼 활성화/비활성화
+        document.getElementById('btnRefinery').disabled = this.resources.gold < 100;
+        document.getElementById('btnBarracks').disabled = this.resources.gold < 150;
+        document.getElementById('btnKnight').disabled = this.resources.gold < 50 || this.resources.mana < 10;
+        document.getElementById('btnRifleman').disabled = this.resources.gold < 40 || this.resources.mana < 30;
+      }
+
+      gameOver() {
+        this.isGameOver = true;
+        document.getElementById('gameOverScreen').classList.remove('hidden');
+        document.getElementById('gameOverScreen').classList.add('flex');
+        
+        let min = Math.floor(this.timeElapsed / 60).toString().padStart(2, '0');
+        let sec = Math.floor(this.timeElapsed % 60).toString().padStart(2, '0');
+        document.getElementById('finalTime').innerText = `${min}:${sec}`;
+      }
+
+      draw() {
+        // 배경 그리기 (그리드 효과)
+        ctx.fillStyle = '#1e293b'; // 슬레이트 배경
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < canvas.width; i += 50) {
+          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+        }
+        for (let i = 0; i < canvas.height; i += 50) {
+          ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
+        }
+
+        // 건물
+        this.buildings.forEach(b => b.draw(ctx));
+        
+        // 건설 모드 프리뷰
+        if (this.buildMode) {
+          ctx.globalAlpha = 0.5;
+          let tempB = new Building(this.mouse.x, this.mouse.y, this.buildMode);
+          tempB.draw(ctx);
+          
+          // 범위 표시
+          ctx.beginPath();
+          ctx.arc(this.mouse.x, this.mouse.y, tempB.radius + 40, 0, Math.PI*2);
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.2)'; // 겹치면 빨간색 (로직 상 단순화)
+          ctx.fill();
+          
+          ctx.globalAlpha = 1.0;
+        }
+
+        // 적
+        this.enemies.forEach(e => e.draw(ctx));
+        
+        // 유닛
+        this.units.forEach(u => u.draw(ctx));
+
+        // 투사체 & 파티클
+        this.projectiles.forEach(p => p.draw(ctx));
+        this.particles.forEach(p => {
+          if (p.type === 'click') {
+            ctx.strokeStyle = `rgba(59, 130, 246, ${p.life})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 15 * (1-p.life), 0, Math.PI*2);
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = p.color || '#fff';
+            ctx.globalAlpha = p.life;
+            ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill();
+            ctx.globalAlpha = 1.0;
+          }
+        });
+
+        // 플로팅 텍스트
+        this.floatingTexts.forEach(ft => {
+          ctx.fillStyle = ft.color;
+          ctx.globalAlpha = Math.min(1, ft.life);
+          ctx.font = 'bold 16px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(ft.text, ft.x, ft.y);
+          ctx.globalAlpha = 1.0;
+        });
+
+        // 드래그 선택 박스
+        if (this.selectionBox) {
+          ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
+          ctx.fillStyle = 'rgba(59, 130, 246, 0.2)';
+          ctx.lineWidth = 1;
+          let w = this.selectionBox.endX - this.selectionBox.startX;
+          let h = this.selectionBox.endY - this.selectionBox.startY;
+          ctx.fillRect(this.selectionBox.startX, this.selectionBox.startY, w, h);
+          ctx.strokeRect(this.selectionBox.startX, this.selectionBox.startY, w, h);
+        }
+      }
+    }
+
+    // --- 엔티티 클래스 ---
+
+    class Building {
+      constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        
+        if (type === 'hq') {
+          this.radius = 50;
+          this.maxHp = 1000;
+          this.color = '#1e3a8a'; // 진한 파랑
+        } else if (type === 'refinery') {
+          this.radius = 25;
+          this.maxHp = 200;
+          this.color = '#7e22ce'; // 보라색
+        } else if (type === 'barracks') {
+          this.radius = 35;
+          this.maxHp = 300;
+          this.color = '#475569'; // 회색
+        }
+        this.hp = this.maxHp;
+      }
+
+      update(dt) {
+        // 건물 특수 로직 필요시 추가
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // 체력바
+        if (this.hp < this.maxHp) {
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(-this.radius, -this.radius - 15, this.radius*2, 6);
+          ctx.fillStyle = '#22c55e';
+          ctx.fillRect(-this.radius, -this.radius - 15, (this.hp/this.maxHp)*this.radius*2, 6);
+        }
+
+        ctx.shadowBlur = 15;
+        if (this.type === 'hq') {
+          ctx.shadowColor = '#60a5fa';
+          ctx.fillStyle = this.color;
+          ctx.fillRect(-40, -40, 80, 80);
+          ctx.fillStyle = '#3b82f6';
+          // 타워들
+          ctx.fillRect(-50, -50, 20, 20); ctx.fillRect(30, -50, 20, 20);
+          ctx.fillRect(-50, 30, 20, 20); ctx.fillRect(30, 30, 20, 20);
+          ctx.fillStyle = '#fff';
+          ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText('사령부', 0, 5);
+        } 
+        else if (this.type === 'refinery') {
+          ctx.shadowColor = '#c084fc';
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.moveTo(0, -30); ctx.lineTo(25, 0); ctx.lineTo(0, 30); ctx.lineTo(-25, 0);
+          ctx.fill();
+          ctx.fillStyle = '#f3e8ff';
+          ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill(); // 중앙 마나 코어
+        } 
+        else if (this.type === 'barracks') {
+          ctx.shadowColor = '#94a3b8';
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.arc(0, 0, this.radius, 0, Math.PI, true);
+          ctx.lineTo(this.radius, 20); ctx.lineTo(-this.radius, 20);
+          ctx.fill();
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-10, 0, 20, 20); // 문
+        }
+        ctx.restore();
+      }
+    }
+
+    class Unit {
+      constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.selected = false;
+        
+        this.state = 'idle'; // idle, move, attack
+        this.targetPos = null;
+        this.targetEnemy = null;
+        
+        this.attackCooldown = 0;
+
+        if (type === 'knight') {
+          this.radius = 12;
+          this.maxHp = 150;
+          this.speed = 80;
+          this.range = 20;
+          this.damage = 25;
+          this.attackRate = 1.0; // 초당
+          this.color = '#cbd5e1'; // 은색
+        } else if (type === 'rifleman') {
+          this.radius = 10;
+          this.maxHp = 60;
+          this.speed = 60;
+          this.range = 150;
+          this.damage = 35;
+          this.attackRate = 1.5;
+          this.color = '#0ea5e9'; // 시안색
+        }
+        this.hp = this.maxHp;
+      }
+
+      update(dt, game) {
+        if (this.attackCooldown > 0) this.attackCooldown -= dt;
+
+        // 적 찾기 (Aggro)
+        if (this.state === 'idle' || (this.state === 'move' && this.targetEnemy === null)) {
+           let closestEnemy = null;
+           let minDist = this.type === 'rifleman' ? 200 : 100; // 어그로 범위
+           for(let e of game.enemies) {
+              let d = getDistance(this.x, this.y, e.x, e.y);
+              if(d < minDist) { minDist = d; closestEnemy = e; }
+           }
+           if (closestEnemy && this.state !== 'move') { // 강제 이동중이 아니면 공격
+             this.targetEnemy = closestEnemy;
+             this.state = 'attack';
+           }
+        }
+
+        // 공격 상태 로직
+        if (this.state === 'attack') {
+          if (!this.targetEnemy || this.targetEnemy.hp <= 0) {
+            this.targetEnemy = null;
+            this.state = 'idle';
+          } else {
+            let dist = getDistance(this.x, this.y, this.targetEnemy.x, this.targetEnemy.y);
+            let attackRange = this.radius + this.targetEnemy.radius + this.range;
+            
+            if (dist <= attackRange) {
+              // 사거리 내: 공격
+              if (this.attackCooldown <= 0) {
+                if (this.type === 'knight') {
+                  this.targetEnemy.hp -= this.damage;
+                  // 검기 파티클
+                  game.particles.push({x: this.targetEnemy.x, y: this.targetEnemy.y, vx: 0, vy: 0, life: 0.2, color: '#e2e8f0'});
+                } else if (this.type === 'rifleman') {
+                  // 마력탄 발사
+                  game.projectiles.push(new Projectile(this.x, this.y, this.targetEnemy, this.damage, '#60a5fa'));
+                }
+                this.attackCooldown = 1 / this.attackRate;
+              }
+            } else {
+              // 사거리 밖: 추적 이동
+              this.moveTowards(this.targetEnemy.x, this.targetEnemy.y, dt);
+            }
+          }
+        } 
+        // 이동 상태 로직
+        else if (this.state === 'move' && this.targetPos) {
+          let dist = getDistance(this.x, this.y, this.targetPos.x, this.targetPos.y);
+          if (dist < 5) {
+            this.state = 'idle';
+            this.targetPos = null;
+          } else {
+            this.moveTowards(this.targetPos.x, this.targetPos.y, dt);
+          }
+        }
+
+        // 유닛간 겹침 방지 (Boids Separation 느낌)
+        for (let other of game.units) {
+          if (other !== this) {
+            let dx = this.x - other.x;
+            let dy = this.y - other.y;
+            let dist = Math.hypot(dx, dy);
+            let minD = this.radius + other.radius + 2;
+            if (dist < minD && dist > 0) {
+              let push = (minD - dist) * 0.5;
+              this.x += (dx/dist) * push;
+              this.y += (dy/dist) * push;
+            }
+          }
+        }
+      }
+
+      moveTowards(tx, ty, dt) {
+        let angle = Math.atan2(ty - this.y, tx - this.x);
+        this.x += Math.cos(angle) * this.speed * dt;
+        this.y += Math.sin(angle) * this.speed * dt;
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // 선택 테두리
+        if (this.selected) {
+          ctx.beginPath();
+          ctx.arc(0, 0, this.radius + 4, 0, Math.PI*2);
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        // 유닛 몸체
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI*2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 방향 표시 (무기)
+        let angle = 0;
+        if (this.targetEnemy) angle = Math.atan2(this.targetEnemy.y - this.y, this.targetEnemy.x - this.x);
+        else if (this.targetPos) angle = Math.atan2(this.targetPos.y - this.y, this.targetPos.x - this.x);
+        
+        ctx.rotate(angle);
+        if (this.type === 'knight') {
+          // 검
+          ctx.fillStyle = '#94a3b8';
+          ctx.fillRect(this.radius-2, -2, 12, 4);
+        } else {
+          // 마도 소총
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(this.radius-4, -3, 16, 6);
+          // 총구 발광
+          ctx.fillStyle = '#38bdf8';
+          ctx.fillRect(this.radius+10, -2, 4, 4);
+        }
+
+        ctx.restore();
+
+        // 체력바
+        if (this.hp < this.maxHp) {
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(this.x - 10, this.y - this.radius - 8, 20, 4);
+          ctx.fillStyle = '#22c55e';
+          ctx.fillRect(this.x - 10, this.y - this.radius - 8, 20 * (this.hp/this.maxHp), 4);
+        }
+      }
+    }
+
+    class Enemy {
+      constructor(x, y, type, statMult) {
+        this.x = x;
+        this.y = y;
+        this.type = type; // 'merc', 'drone', 'golem'
+        
+        this.attackCooldown = 0;
+
+        if (type === 'merc') {
+          this.radius = 12;
+          this.maxHp = 60 * statMult;
+          this.speed = 50 + (Math.random()*10);
+          this.damage = 10 * statMult;
+          this.range = 5;
+          this.attackRate = 1.0;
+          this.reward = 10;
+          this.color = '#b91c1c'; // 빨강
+        } else if (type === 'drone') {
+          this.radius = 10;
+          this.maxHp = 40 * statMult;
+          this.speed = 70;
+          this.damage = 15 * statMult;
+          this.range = 100;
+          this.attackRate = 0.8;
+          this.reward = 15;
+          this.color = '#c026d3'; // 자홍색
+        } else if (type === 'golem') {
+          this.radius = 25;
+          this.maxHp = 500 * statMult;
+          this.speed = 25;
+          this.damage = 50 * statMult;
+          this.range = 15;
+          this.attackRate = 0.5;
+          this.reward = 100;
+          this.color = '#450a0a'; // 짙은 빨강
+        }
+        
+        this.hp = this.maxHp;
+        this.target = null;
+      }
+
+      update(dt, game) {
+        if (this.attackCooldown > 0) this.attackCooldown -= dt;
+
+        // 타겟 결정 로직 (사령부가 최우선, 가는 길에 유닛이나 건물이 있으면 때림)
+        this.target = game.hq; 
+        
+        // 근접한 방해물 탐색
+        let closestDist = 9999;
+        let aggroRange = 100; // 시야
+
+        // 유닛 탐색
+        for(let u of game.units) {
+           let d = getDistance(this.x, this.y, u.x, u.y);
+           if(d < aggroRange && d < closestDist) {
+             closestDist = d; this.target = u;
+           }
+        }
+        // 건물 탐색 (HQ 제외 다른 건물들)
+        if (this.target === game.hq) {
+          for(let b of game.buildings) {
+            if(b === game.hq) continue;
+            let d = getDistance(this.x, this.y, b.x, b.y);
+            if(d < aggroRange && d < closestDist) {
+               closestDist = d; this.target = b;
+            }
+          }
+        }
+
+        // 이동 및 공격
+        if (this.target) {
+          let dist = getDistance(this.x, this.y, this.target.x, this.target.y);
+          let attackRange = this.radius + this.target.radius + this.range;
+
+          if (dist <= attackRange) {
+            // 공격
+            if (this.attackCooldown <= 0) {
+              if (this.type === 'drone') {
+                 game.projectiles.push(new Projectile(this.x, this.y, this.target, this.damage, '#ef4444'));
+              } else {
+                 this.target.hp -= this.damage;
+                 // 타격 파티클
+                 game.particles.push({x: this.target.x, y: this.target.y, vx: 0, vy: 0, life: 0.2, color: '#ef4444'});
+              }
+              this.attackCooldown = 1 / this.attackRate;
+            }
+          } else {
+            // 이동
+            let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+            this.x += Math.cos(angle) * this.speed * dt;
+            this.y += Math.sin(angle) * this.speed * dt;
+          }
+        }
+        
+        // 겹침 방지 (적끼리)
+        for (let other of game.enemies) {
+          if (other !== this) {
+            let dx = this.x - other.x;
+            let dy = this.y - other.y;
+            let dist = Math.hypot(dx, dy);
+            let minD = this.radius + other.radius;
+            if (dist < minD && dist > 0) {
+              let push = (minD - dist) * 0.5;
+              this.x += (dx/dist) * push;
+              this.y += (dy/dist) * push;
+            }
+          }
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        ctx.fillStyle = this.color;
+        if (this.type === 'drone') {
+           // 다이아몬드 형
+           ctx.beginPath();
+           ctx.moveTo(0, -this.radius); ctx.lineTo(this.radius, 0); 
+           ctx.lineTo(0, this.radius); ctx.lineTo(-this.radius, 0);
+           ctx.fill();
+        } else if (this.type === 'golem') {
+           // 사각형 보스
+           ctx.fillRect(-this.radius, -this.radius, this.radius*2, this.radius*2);
+           ctx.fillStyle = '#ef4444'; // 눈
+           ctx.fillRect(this.radius-10, -5, 10, 10);
+        } else {
+           // 오크/용병 (원형)
+           ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI*2); ctx.fill();
+        }
+        
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.restore();
+
+        // 체력바
+        if (this.hp < this.maxHp) {
+          ctx.fillStyle = '#000';
+          ctx.fillRect(this.x - 15, this.y - this.radius - 8, 30, 4);
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(this.x - 15, this.y - this.radius - 8, 30 * (Math.max(0, this.hp)/this.maxHp), 4);
+        }
+      }
+    }
+
+    class Projectile {
+      constructor(x, y, target, damage, color) {
+        this.x = x;
+        this.y = y;
+        this.target = target;
+        this.damage = damage;
+        this.color = color;
+        this.speed = 300;
+        this.life = 1.0; // 최대 체공 시간 (초)
+      }
+
+      update(dt) {
+        if (!this.target || this.target.hp <= 0) {
+          this.life = 0; // 타겟 소실시 소멸
+          return;
+        }
+
+        let dist = getDistance(this.x, this.y, this.target.x, this.target.y);
+        if (dist < this.target.radius + 5) {
+          // 명중
+          this.target.hp -= this.damage;
+          this.life = 0;
+        } else {
+          // 추적 이동
+          let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+          this.x += Math.cos(angle) * this.speed * dt;
+          this.y += Math.sin(angle) * this.speed * dt;
+          this.life -= dt;
+        }
+      }
+
+      draw(ctx) {
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    // --- 메인 게임 루프 ---
+    const game = new Game();
+
+    function gameLoop(timestamp) {
+      let dt = (timestamp - game.lastTime) / 1000;
+      if (dt > 0.1) dt = 0.1; // 탭 전환 등으로 인한 프레임 스킵 방지
+      game.lastTime = timestamp;
+
+      game.update(dt);
+      game.draw();
+      
+      // UI 업데이트 (주기적)
+      if (Math.random() < 0.1) game.updateUI();
+
+      if (!game.isGameOver) {
+        requestAnimationFrame(gameLoop);
+      } else {
+        // 게임 오버 상태에서도 마지막 화면 렌더링 유지
+        game.draw();
+      }
+    }
+    
+    // 시작
+    requestAnimationFrame(gameLoop);
+
+  </script>
+</body>
+</html>
