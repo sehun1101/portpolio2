@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>사이버 닌자 3D (3rd Person Action)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+KR:wght@300;400;700&display=swap');
+        
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Noto Sans KR', sans-serif; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .glass { background: rgba(0, 10, 20, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(0, 255, 255, 0.3); box-shadow: 0 0 15px rgba(0, 255, 255, 0.1); }
+        .cyber-font { font-family: 'Orbitron', sans-serif; }
+        
+        #crosshair { 
+            position: absolute; top: 50%; left: 50%; 
+            width: 24px; height: 24px; 
+            border: 1px solid rgba(0, 255, 255, 0.6); 
+            border-radius: 50%; transform: translate(-50%, -50%); 
+        }
+        #crosshair::before { content: ''; position: absolute; top: 50%; left: 50%; width: 2px; height: 2px; background: cyan; transform: translate(-50%, -50%); }
+
+        .btn-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .btn-hover:hover { transform: scale(1.05); box-shadow: 0 0 25px rgba(0, 255, 255, 0.4); }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <!-- 홈 버튼 (상시 노출) -->
+    <a href="https://sehun1101.github.io/portpolio2/" target="_top" class="fixed top-6 left-6 z-50 glass px-5 py-2.5 rounded-md text-cyan-400 cyber-font font-bold flex items-center gap-2 hover:text-white transition-all pointer-events-auto border-l-4 border-l-cyan-500">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        HOME
+    </a>
+
+    <!-- 시작 화면 -->
+    <div id="startScreen" class="fixed inset-0 z-40 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black flex flex-col items-center justify-center pointer-events-auto">
+        <div class="absolute inset-0 opacity-20 pointer-events-none" style="background-image: radial-gradient(cyan 1px, transparent 0); background-size: 40px 40px;"></div>
+        
+        <h1 class="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-blue-600 mb-2 cyber-font tracking-tighter italic">CYBER NINJA</h1>
+        <p class="text-cyan-500/60 cyber-font tracking-[0.5em] mb-12 text-sm uppercase">Urban Cleanup Protocol v2.5</p>
+        
+        <div class="flex gap-6">
+            <button onclick="showHowTo()" class="px-10 py-4 glass text-white rounded-sm cyber-font font-bold btn-hover border-b-2 border-b-white/20">HOW TO PLAY</button>
+            <button onclick="initGame()" class="px-14 py-4 bg-cyan-500 text-black rounded-sm cyber-font font-black btn-hover shadow-[0_0_30px_rgba(0,255,255,0.3)]">INITIALIZE</button>
+        </div>
+    </div>
+
+    <!-- 게임 방법 모달 -->
+    <div id="howToModal" class="fixed inset-0 z-50 bg-black/90 hidden items-center justify-center p-6 pointer-events-auto backdrop-blur-sm">
+        <div class="glass max-w-lg w-full p-10 rounded-sm text-white border-t-4 border-t-cyan-500">
+            <h2 class="text-3xl font-black mb-6 text-cyan-400 cyber-font tracking-tight">MISSION BRIEFING</h2>
+            
+            <div class="space-y-6 mb-10">
+                <section>
+                    <h3 class="text-xs font-bold text-cyan-500 uppercase tracking-widest mb-2">Movement & Combat</h3>
+                    <ul class="grid grid-cols-2 gap-3 text-sm">
+                        <li><span class="text-cyan-400 font-bold mr-2">[W,A,S,D]</span> 이동</li>
+                        <li><span class="text-cyan-400 font-bold mr-2">[SPACE]</span> 점프</li>
+                        <li><span class="text-cyan-400 font-bold mr-2">[L-CLICK]</span> 공격</li>
+                        <li><span class="text-cyan-400 font-bold mr-2">[R-CLICK]</span> 방어</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h3 class="text-xs font-bold text-cyan-500 uppercase tracking-widest mb-2">Objective</h3>
+                    <p class="text-gray-300 text-sm leading-relaxed">
+                        도시를 점령한 기계 병단들로부터 최대한 오래 살아남으세요. <br>
+                        <span class="text-white font-bold italic">공격 중에는 방어가 불가능하며, 방어 중에는 이동 속도가 저하됩니다.</span> 드론의 원거리 사격과 자폭 유닛을 주의하며 점수를 획득하십시오.
+                    </p>
+                </section>
+            </div>
+
+            <button onclick="closeHowTo()" class="w-full py-4 bg-white/5 border border-white/20 hover:bg-white/10 text-white cyber-font font-bold transition-all uppercase tracking-widest">Acknowledge</button>
+        </div>
+    </div>
+
+    <!-- 인게임 UI (기존 유지 및 개선) -->
+    <div id="ui-layer">
+        <div id="crosshair"></div>
+        <div class="fixed bottom-10 left-10 glass p-6 rounded-sm text-white pointer-events-auto border-l-4 border-l-cyan-500">
+            <div class="text-[10px] text-cyan-400 cyber-font font-bold mb-2 tracking-widest">NEURAL LINK ACTIVE</div>
+            <div class="flex items-center gap-6">
+                <div>
+                    <div class="flex justify-between text-[10px] mb-1 cyber-font">
+                        <span>INTEGRITY</span>
+                        <span id="hp-text">100%</span>
+                    </div>
+                    <div class="w-56 h-1.5 bg-gray-900 rounded-full overflow-hidden">
+                        <div id="hp-bar" class="w-full h-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-300 shadow-[0_0_10px_rgba(0,255,255,0.5)]"></div>
+                    </div>
+                </div>
+                <div class="h-10 w-[1px] bg-white/10"></div>
+                <div>
+                    <div class="text-[10px] mb-0.5 cyber-font text-gray-400">SCORE</div>
+                    <div id="score" class="cyber-font text-2xl font-black text-white">0000</div>
+                </div>
+            </div>
+            <div id="status-text" class="text-[9px] mt-3 text-gray-500 cyber-font tracking-widest animate-pulse uppercase">DEFENSIVE MODS: READY</div>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, player, clock, shieldMesh;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let canJump = true, velocity = new THREE.Vector3();
+        let isMouseDown = false; 
+        let isDefending = false; 
+        let enemies = [], projectiles = [], enemyProjectiles = [];
+        let score = 0;
+        let health = 100;
+        let gameStarted = false;
+
+        function showHowTo() { document.getElementById('howToModal').style.display = 'flex'; }
+        function closeHowTo() { document.getElementById('howToModal').style.display = 'none'; }
+
+        function initGame() {
+            if (gameStarted) return;
+            gameStarted = true;
+            document.getElementById('startScreen').style.display = 'none';
+            
+            // 3D 환경 초기화
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020308);
+            scene.fog = new THREE.FogExp2(0x020308, 0.015);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0x404040, 2);
+            scene.add(ambientLight);
+
+            const hemiLight = new THREE.HemisphereLight(0x00ffff, 0xff00ff, 0.4);
+            scene.add(hemiLight);
+
+            // 바닥 및 그리드
+            const floorGeo = new THREE.PlaneGeometry(2000, 2000);
+            const floorMat = new THREE.MeshPhongMaterial({ color: 0x050505, specular: 0x111111, shininess: 50 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            const grid = new THREE.GridHelper(2000, 100, 0x00ffff, 0x112222);
+            grid.position.y = 0.01;
+            scene.add(grid);
+
+            // 플레이어 모델링
+            const playerGroup = new THREE.Group();
+            const bodyGeo = new THREE.BoxGeometry(0.6, 1.2, 0.4);
+            const bodyMat = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x008888, emissiveIntensity: 0.5 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.6;
+            playerGroup.add(body);
+
+            const headGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+            const headMat = new THREE.MeshPhongMaterial({ color: 0xffffff });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 1.4;
+            playerGroup.add(head);
+
+            // 방어막 메시
+            const shieldGeo = new THREE.SphereGeometry(1.4, 24, 24);
+            const shieldMat = new THREE.MeshBasicMaterial({ 
+                color: 0x00ffff, transparent: true, opacity: 0.2, wireframe: true 
+            });
+            shieldMesh = new THREE.Mesh(shieldGeo, shieldMat);
+            shieldMesh.position.y = 0.8;
+            shieldMesh.visible = false;
+            playerGroup.add(shieldMesh);
+
+            player = playerGroup;
+            scene.add(player);
+
+            // 환경 오브젝트 생성
+            for(let i = 0; i < 60; i++) createBuilding();
+
+            clock = new THREE.Clock();
+            
+            // 이벤트 리스너
+            window.addEventListener('keydown', onKeyDown);
+            window.addEventListener('keyup', onKeyUp);
+            window.addEventListener('mousedown', (e) => {
+                if (e.button === 0) { shoot(); isMouseDown = true; } 
+                else if (e.button === 2) { startDefense(); }
+            });
+            window.addEventListener('mouseup', (e) => {
+                if (e.button === 0) { isMouseDown = false; } 
+                else if (e.button === 2) { stopDefense(); }
+            });
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('resize', onWindowResize);
+
+            animate();
+            spawnEnemyLoop();
+        }
+
+        function createBuilding() {
+            const h = Math.random() * 30 + 10;
+            const w = Math.random() * 8 + 4;
+            const geo = new THREE.BoxGeometry(w, h, w);
+            const mat = new THREE.MeshPhongMaterial({ 
+                color: 0x000000, 
+                emissive: new THREE.Color(0, Math.random() * 0.2, Math.random() * 0.3)
+            });
+            const b = new THREE.Mesh(geo, mat);
+            b.position.set((Math.random()-0.5)*400, h/2, (Math.random()-0.5)*400);
+            scene.add(b);
+
+            const edges = new THREE.EdgesGeometry(geo);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.3 }));
+            line.position.copy(b.position);
+            scene.add(line);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function onKeyDown(e) {
+            switch(e.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyD': moveRight = true; break;
+                case 'Space': if(canJump) { velocity.y += 12; canJump = false; } break;
+            }
+        }
+
+        function onKeyUp(e) {
+            switch(e.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyD': moveRight = false; break;
+            }
+        }
+
+        function onMouseMove(e) {
+            if(gameStarted && (isMouseDown || isDefending)) {
+                player.rotation.y -= e.movementX * 0.005;
+            }
+        }
+
+        function shoot() {
+            if (!gameStarted || isDefending) return;
+            const geo = new THREE.SphereGeometry(0.25, 8, 8);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+            const p = new THREE.Mesh(geo, mat);
+            p.position.copy(player.position);
+            p.position.y += 1.1;
+            
+            const direction = new THREE.Vector3(0, 0, -1);
+            direction.applyQuaternion(player.quaternion);
+            
+            projectiles.push({ mesh: p, vel: direction.multiplyScalar(2.0), life: 120 });
+            scene.add(p);
+        }
+
+        function startDefense() {
+            isDefending = true;
+            shieldMesh.visible = true;
+            const status = document.getElementById('status-text');
+            status.innerText = "DEFENSIVE MODS: ACTIVE";
+            status.classList.replace('text-gray-500', 'text-cyan-400');
+        }
+
+        function stopDefense() {
+            isDefending = false;
+            shieldMesh.visible = false;
+            const status = document.getElementById('status-text');
+            status.innerText = "DEFENSIVE MODS: READY";
+            status.classList.replace('text-cyan-400', 'text-gray-500');
+        }
+
+        function spawnEnemyLoop() {
+            setInterval(() => {
+                if(!gameStarted || enemies.length > 35) return;
+                
+                const typeRoll = Math.random();
+                let enemyData = {};
+
+                if (typeRoll < 0.5) { // Scout
+                    enemyData = { type: 'scout', color: 0xff0055, hp: 1, speed: 0.18, size: 0.8, geometry: new THREE.OctahedronGeometry(0.8) };
+                } else if (typeRoll < 0.75) { // Walker
+                    enemyData = { type: 'walker', color: 0xffcc00, hp: 6, speed: 0.06, size: 2.2, geometry: new THREE.BoxGeometry(1.8, 1.8, 1.8) };
+                } else if (typeRoll < 0.9) { // Buster
+                    enemyData = { type: 'buster', color: 0xff6600, hp: 1, speed: 0.3, size: 0.7, geometry: new THREE.SphereGeometry(0.7, 12, 12) };
+                } else { // Drone
+                    enemyData = { type: 'drone', color: 0xaa00ff, hp: 3, speed: 0.1, size: 0.8, geometry: new THREE.TetrahedronGeometry(0.8) };
+                }
+
+                const mat = new THREE.MeshPhongMaterial({ color: enemyData.color, emissive: enemyData.color, emissiveIntensity: 0.6 });
+                const e = new THREE.Mesh(enemyData.geometry, mat);
+                
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 80 + Math.random() * 40;
+                e.position.set(player.position.x + Math.cos(angle) * dist, enemyData.size/2, player.position.z + Math.sin(angle) * dist);
+                
+                e.userData = { ...enemyData, shootTimer: 1 + Math.random() * 2 };
+                enemies.push(e);
+                scene.add(e);
+            }, 1000);
+        }
+
+        function takeDamage(amount) {
+            health -= amount;
+            document.getElementById('hp-bar').style.width = Math.max(0, health) + "%";
+            document.getElementById('hp-text').innerText = Math.ceil(Math.max(0, health)) + "%";
+            
+            if(health <= 0) {
+                health = 100;
+                score = Math.max(0, score - 2000);
+                document.getElementById('score').innerText = score.toString().padStart(4, '0');
+                player.position.set(0, 0, 0); // 사망 시 리스폰
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!gameStarted) return;
+
+            const delta = clock.getDelta();
+
+            // 물리 시뮬레이션
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+            velocity.y -= 30.0 * delta;
+
+            const direction = new THREE.Vector3();
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+
+            const currentSpeed = isDefending ? 180.0 : 450.0;
+            if (moveForward || moveBackward) velocity.z -= direction.z * currentSpeed * delta;
+            if (moveLeft || moveRight) velocity.x -= direction.x * currentSpeed * delta;
+
+            player.translateX(-velocity.x * delta);
+            player.translateZ(-velocity.z * delta);
+            player.position.y += velocity.y * delta;
+
+            if (player.position.y < 0) { velocity.y = 0; player.position.y = 0; canJump = true; }
+
+            if (isDefending) {
+                shieldMesh.rotation.y += 0.08;
+                shieldMesh.scale.setScalar(1 + Math.sin(Date.now() * 0.012) * 0.05);
+            }
+
+            // 카메라 로직
+            const camOffset = new THREE.Vector3(0, 3.5, 9);
+            camOffset.applyQuaternion(player.quaternion);
+            camera.position.lerp(player.position.clone().add(camOffset), 0.12);
+            camera.lookAt(player.position.clone().add(new THREE.Vector3(0, 1.8, 0)));
+
+            // 투사체 처리 (플레이어)
+            for(let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.mesh.position.add(p.vel);
+                p.life--;
+                
+                enemies.forEach((enemy, eIdx) => {
+                    if(p.mesh.position.distanceTo(enemy.position) < (enemy.userData.size + 0.6)) {
+                        enemy.userData.hp--;
+                        p.life = 0;
+                        if(enemy.userData.hp <= 0) {
+                            scene.remove(enemy);
+                            enemies.splice(eIdx, 1);
+                            score += (enemy.userData.type === 'walker' ? 800 : 150);
+                            document.getElementById('score').innerText = score.toString().padStart(4, '0');
+                        }
+                    }
+                });
+                if(p.life <= 0) { scene.remove(p.mesh); projectiles.splice(i, 1); }
+            }
+
+            // 투사체 처리 (적군)
+            for(let i = enemyProjectiles.length - 1; i >= 0; i--) {
+                const ep = enemyProjectiles[i];
+                ep.mesh.position.add(ep.vel);
+                ep.life--;
+                if(ep.mesh.position.distanceTo(player.position) < 1.6) {
+                    if(!isDefending) takeDamage(8);
+                    ep.life = 0;
+                }
+                if(ep.life <= 0) { scene.remove(ep.mesh); enemyProjectiles.splice(i, 1); }
+            }
+
+            // 적군 AI 루프
+            enemies.forEach((enemy, index) => {
+                const distToPlayer = enemy.position.distanceTo(player.position);
+                const dirToPlayer = player.position.clone().sub(enemy.position).normalize();
+                
+                if(enemy.userData.type === 'drone') {
+                    if(distToPlayer > 18) enemy.position.add(dirToPlayer.multiplyScalar(enemy.userData.speed));
+                    else if(distToPlayer < 12) enemy.position.sub(dirToPlayer.multiplyScalar(enemy.userData.speed));
+                    
+                    enemy.userData.shootTimer -= delta;
+                    if(enemy.userData.shootTimer <= 0) {
+                        const epGeo = new THREE.SphereGeometry(0.3, 6, 6);
+                        const epMat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+                        const epMesh = new THREE.Mesh(epGeo, epMat);
+                        epMesh.position.copy(enemy.position);
+                        enemyProjectiles.push({ mesh: epMesh, vel: dirToPlayer.clone().multiplyScalar(0.7), life: 120 });
+                        scene.add(epMesh);
+                        enemy.userData.shootTimer = 2.5;
+                    }
+                } else {
+                    enemy.position.add(dirToPlayer.multiplyScalar(enemy.userData.speed));
+                }
+
+                enemy.rotation.y += 0.04;
+                
+                if(distToPlayer < (enemy.userData.size + 0.8)) {
+                    if (isDefending) {
+                        enemy.position.sub(dirToPlayer.multiplyScalar(1.5));
+                    } else {
+                        if(enemy.userData.type === 'buster') {
+                            takeDamage(30);
+                            scene.remove(enemy);
+                            enemies.splice(index, 1);
+                        } else {
+                            takeDamage(0.35);
+                        }
+                    }
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
