@@ -53,7 +53,7 @@
       <div class="flex flex-col gap-2 text-lg font-semibold text-gray-200">
         <div class="flex justify-between items-center">
           <span>💰 군자금:</span>
-          <span id="goldDisplay" class="text-yellow-400">200</span>
+          <span id="goldDisplay" class="text-yellow-400">1000</span>
         </div>
         <div class="flex justify-between items-center">
           <span>🔮 마나 코어:</span>
@@ -81,11 +81,11 @@
         <div class="flex gap-2">
           <button id="btnRefinery" onclick="game.setBuildMode('refinery')" class="btn-action bg-purple-900/50 border border-purple-500 text-purple-200 px-4 py-2 rounded font-medium text-sm flex flex-col items-center">
             <span>마나 추출기</span>
-            <span class="text-xs text-gray-400 mt-1">10G</span>
+            <span class="text-xs text-gray-400 mt-1">100G</span>
           </button>
           <button id="btnBarracks" onclick="game.setBuildMode('barracks')" class="btn-action bg-blue-900/50 border border-blue-500 text-blue-200 px-4 py-2 rounded font-medium text-sm flex flex-col items-center">
             <span>마도 병영</span>
-            <span class="text-xs text-gray-400 mt-1">25G</span>
+            <span class="text-xs text-gray-400 mt-1">150G</span>
           </button>
         </div>
       </div>
@@ -142,7 +142,7 @@
       constructor() {
         this.lastTime = performance.now();
         this.timeElapsed = 0; // 게임 진행 시간 (초)
-        this.resources = { gold: 200, mana: 0 };
+        this.resources = { gold: 1000, mana: 0 }; // 시작 군자금 1000으로 변경
         this.resourceTick = 0;
 
         this.buildings = [];
@@ -236,8 +236,9 @@
       }
 
       trainUnit(type) {
-        let costGold = type === 'knight' ? 50 : 40;
-        let costMana = type === 'knight' ? 10 : 30;
+        // 비용 조정 적용
+        let costGold = type === 'knight' ? 100 : 50;
+        let costMana = type === 'knight' ? 0 : 50;
         
         let barracksList = this.buildings.filter(b => b.type === 'barracks');
         if (barracksList.length === 0) {
@@ -467,8 +468,9 @@
         // 버튼 활성화/비활성화
         document.getElementById('btnRefinery').disabled = this.resources.gold < 100;
         document.getElementById('btnBarracks').disabled = this.resources.gold < 150;
-        document.getElementById('btnKnight').disabled = this.resources.gold < 50 || this.resources.mana < 10;
-        document.getElementById('btnRifleman').disabled = this.resources.gold < 40 || this.resources.mana < 30;
+        // 비용 조정 적용된 버튼 활성화 로직
+        document.getElementById('btnKnight').disabled = this.resources.gold < 100; // 마나는 0이므로 체크 제외
+        document.getElementById('btnRifleman').disabled = this.resources.gold < 50 || this.resources.mana < 50;
       }
 
       gameOver() {
