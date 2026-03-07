@@ -3,98 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>멀티플레이어 술래잡기: 커스텀 에디션</title>
+    <title>초정밀 실시간 멀티플레이어 술래잡기</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background-color: #f0f4f8; color: #1a202c; user-select: none; overflow: hidden; font-family: 'Pretendard', sans-serif; }
-        #game-container { width: 1100px; height: 700px; box-shadow: 0 20px 50px rgba(0,0,0,0.1); background: white; }
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700;900&display=swap');
+        body { background-color: #f1f5f9; color: #1e293b; user-select: none; overflow: hidden; font-family: 'Pretendard', sans-serif; }
+        #game-container { width: 1100px; height: 700px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); background: white; }
         #chat-box::-webkit-scrollbar { width: 4px; }
-        #chat-box::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 2px; }
-        canvas { background-color: #ffffff; background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 40px 40px; }
-        .lobby-overlay { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
-        .color-dot { width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all 0.2s; }
-        .color-dot.active { border-color: #1a202c; transform: scale(1.2); }
-        .shape-btn { padding: 8px 16px; border-radius: 8px; border: 2px solid #e2e8f0; cursor: pointer; transition: all 0.2s; }
-        .shape-btn.active { border-color: #1a202c; background: #f7fafc; }
+        #chat-box::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 10px; }
+        canvas { background-color: #fcfcfc; background-image: radial-gradient(#e2e8f0 1.5px, transparent 1.5px); background-size: 30px 30px; cursor: crosshair; }
+        .lobby-overlay { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(15px); }
+        .color-dot { width: 36px; height: 36px; border-radius: 12px; cursor: pointer; border: 3px solid transparent; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .color-dot.active { border-color: #0f172a; transform: scale(1.1) rotate(5deg); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .shape-btn { padding: 12px 20px; border-radius: 14px; border: 2px solid #f1f5f9; cursor: pointer; transition: all 0.2s; font-weight: 700; background: white; }
+        .shape-btn.active { border-color: #0f172a; background: #0f172a; color: white; }
+        .player-label { pointer-events: none; transition: transform 0.1s ease-out; }
     </style>
 </head>
 <body class="h-screen w-screen flex items-center justify-center flex-col">
 
-    <div class="relative rounded-3xl overflow-hidden flex border-8 border-white shadow-2xl" id="game-container">
-        <!-- 메인 게임 영역 -->
-        <div class="relative">
+    <div class="relative rounded-[2.5rem] overflow-hidden flex border-[12px] border-white shadow-2xl" id="game-container">
+        <!-- Main Game Area -->
+        <div class="relative flex-1">
             <canvas id="gameCanvas" width="800" height="700"></canvas>
             
-            <!-- 우측 상단 커스텀 버튼 -->
-            <button id="back-to-lobby" class="absolute top-4 right-4 bg-white/90 hover:bg-white px-4 py-2 rounded-full shadow-md text-sm font-bold flex items-center gap-2 transition-all z-40 hidden">
-                <i class="fas fa-paint-brush text-blue-500"></i> 커스텀
-            </button>
+            <!-- Top Right UI -->
+            <div class="absolute top-6 right-6 flex gap-3 z-40">
+                <button id="back-to-lobby" class="bg-white/90 hover:bg-white px-6 py-3 rounded-2xl shadow-lg text-sm font-black flex items-center gap-2 transition-all transform hover:scale-105 hidden border border-slate-100">
+                    <i class="fas fa-paint-brush text-indigo-500"></i> 꾸미기
+                </button>
+            </div>
 
-            <!-- 로비/커스터마이징 오버레이 -->
-            <div id="lobby-screen" class="absolute inset-0 lobby-overlay flex items-center justify-center z-50">
-                <div class="bg-white p-10 rounded-3xl shadow-2xl w-[450px] text-center border border-gray-100">
-                    <h2 class="text-4xl font-black mb-6 text-gray-800 tracking-tight">캐릭터 설정</h2>
+            <!-- Lobby Overlay -->
+            <div id="lobby-screen" class="absolute inset-0 lobby-overlay flex items-center justify-center z-50 transition-opacity duration-300">
+                <div class="bg-white p-12 rounded-[3rem] shadow-2xl w-[480px] text-center border border-slate-100 ring-1 ring-slate-100">
+                    <div class="mb-8">
+                        <span class="bg-indigo-100 text-indigo-600 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">Multiplayer Tag</span>
+                        <h2 class="text-5xl font-[900] mt-3 text-slate-900 tracking-tight">캐릭터 커스텀</h2>
+                    </div>
                     
-                    <div class="space-y-6">
-                        <!-- 닉네임 입력 -->
+                    <div class="space-y-8">
+                        <!-- Nickname -->
                         <div class="text-left">
-                            <label class="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">닉네임</label>
-                            <input type="text" id="nickname-input" maxlength="8" placeholder="최대 8자" class="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl outline-none focus:border-blue-400 transition-all text-lg font-bold">
+                            <label class="block text-xs font-black text-slate-400 uppercase mb-3 ml-1 tracking-wider">닉네임 설정</label>
+                            <input type="text" id="nickname-input" maxlength="10" placeholder="닉네임을 입력하세요" class="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl outline-none focus:border-indigo-400 transition-all text-xl font-bold shadow-inner">
                         </div>
 
-                        <!-- 색상 선택 -->
+                        <!-- Color Picker -->
                         <div class="text-left">
-                            <label class="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">캐릭터 색상</label>
-                            <div class="flex gap-3 mt-2" id="color-picker">
-                                <div class="color-dot active" data-color="#3b82f6" style="background: #3b82f6;"></div>
+                            <label class="block text-xs font-black text-slate-400 uppercase mb-3 ml-1 tracking-wider">색상 테마</label>
+                            <div class="flex justify-between" id="color-picker">
+                                <div class="color-dot active" data-color="#6366f1" style="background: #6366f1;"></div>
                                 <div class="color-dot" data-color="#10b981" style="background: #10b981;"></div>
                                 <div class="color-dot" data-color="#f59e0b" style="background: #f59e0b;"></div>
-                                <div class="color-dot" data-color="#8b5cf6" style="background: #8b5cf6;"></div>
+                                <div class="color-dot" data-color="#ef4444" style="background: #ef4444;"></div>
                                 <div class="color-dot" data-color="#ec4899" style="background: #ec4899;"></div>
                                 <div class="color-dot" data-color="#06b6d4" style="background: #06b6d4;"></div>
+                                <div class="color-dot" data-color="#1e293b" style="background: #1e293b;"></div>
                             </div>
                         </div>
 
-                        <!-- 모양 선택 -->
+                        <!-- Shape Picker -->
                         <div class="text-left">
-                            <label class="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">캐릭터 모양</label>
-                            <div class="flex gap-3 mt-2">
-                                <button class="shape-btn active" data-shape="circle"><i class="fas fa-circle mr-2"></i>원형</button>
-                                <button class="shape-btn" data-shape="square"><i class="fas fa-square mr-2"></i>사각형</button>
+                            <label class="block text-xs font-black text-slate-400 uppercase mb-3 ml-1 tracking-wider">캐릭터 형태</label>
+                            <div class="grid grid-cols-2 gap-4">
+                                <button class="shape-btn active" data-shape="circle"><i class="fas fa-circle mr-2"></i> 동그라미</button>
+                                <button class="shape-btn" data-shape="square"><i class="fas fa-square mr-2"></i> 네모네모</button>
                             </div>
                         </div>
                     </div>
 
-                    <button id="start-game-btn" class="w-full mt-10 bg-gray-900 text-white p-5 rounded-2xl font-black text-xl hover:bg-black transform hover:-translate-y-1 transition-all shadow-xl">
-                        게임 시작하기
+                    <button id="start-game-btn" class="w-full mt-10 bg-indigo-600 text-white p-6 rounded-2xl font-black text-2xl hover:bg-indigo-700 transform hover:-translate-y-1 transition-all shadow-xl shadow-indigo-200">
+                        전장 입장하기
                     </button>
                 </div>
             </div>
 
-            <div id="loading-overlay" class="absolute inset-0 bg-white/90 flex items-center justify-center z-[60]">
+            <!-- Loading Info -->
+            <div id="loading-overlay" class="absolute inset-0 bg-slate-900 flex items-center justify-center z-[60]">
                 <div class="text-center">
-                    <i class="fas fa-circle-notch fa-spin text-5xl text-blue-500 mb-4"></i>
-                    <p class="text-gray-500 font-bold">서버 연결 중...</p>
+                    <div class="relative w-20 h-20 mx-auto mb-6">
+                        <div class="absolute inset-0 border-4 border-indigo-500/20 rounded-full"></div>
+                        <div class="absolute inset-0 border-4 border-t-indigo-500 rounded-full animate-spin"></div>
+                    </div>
+                    <p class="text-white font-black text-xl tracking-widest">SERVER CONNECTING</p>
+                    <p class="text-slate-400 text-sm mt-2">안정적인 멀티플레이 환경을 구축 중입니다...</p>
                 </div>
             </div>
         </div>
 
-        <!-- 사이드바: 정보 및 채팅 -->
-        <div class="w-[300px] bg-gray-50 flex flex-col border-l border-gray-100">
-            <div class="p-6 bg-white border-b border-gray-100">
-                <div class="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">현재 상태</div>
-                <div id="my-role-display" class="font-black text-2xl text-blue-500">연결 대기</div>
+        <!-- Sidebar -->
+        <div class="w-[300px] bg-slate-50 flex flex-col border-l border-slate-100">
+            <div class="p-8 bg-white border-b border-slate-100">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-[10px] text-slate-400 font-black uppercase tracking-widest">내 역할</span>
+                    <div id="ping-display" class="text-[10px] font-bold text-emerald-500">SERVER OK</div>
+                </div>
+                <div id="my-role-display" class="font-black text-3xl text-slate-300 italic">READY</div>
+                <div id="tagger-info" class="text-xs mt-3 text-slate-400 font-medium">현재 술래를 찾는 중...</div>
             </div>
 
             <div class="flex-1 flex flex-col overflow-hidden">
-                <div class="px-6 py-4 flex justify-between items-center bg-gray-50/50">
-                    <span class="text-xs font-bold text-gray-400 uppercase tracking-tighter">실시간 채팅</span>
-                    <span id="player-count" class="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-[10px] font-bold">0명</span>
+                <div class="px-8 py-4 flex justify-between items-center">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">온라인 플레이어</span>
+                    <span id="player-count" class="bg-indigo-600 text-white px-3 py-1 rounded-full text-[10px] font-black">0</span>
                 </div>
-                <div id="chat-box" class="flex-1 p-6 overflow-y-auto space-y-3 text-sm"></div>
-                <div class="p-4 bg-white border-t border-gray-100">
-                    <input type="text" id="chat-input" placeholder="메시지 보내기..." class="w-full bg-gray-100 p-3 rounded-xl outline-none focus:ring-2 ring-blue-100 transition-all text-sm">
+                <div id="chat-box" class="flex-1 px-8 py-2 overflow-y-auto space-y-4"></div>
+                <div class="p-6 bg-white border-t border-slate-100">
+                    <div class="relative">
+                        <input type="text" id="chat-input" placeholder="메시지 입력..." class="w-full bg-slate-100 p-4 pr-12 rounded-2xl outline-none focus:ring-2 ring-indigo-100 transition-all text-sm font-medium">
+                        <button onclick="sendChat()" class="absolute right-3 top-3 text-indigo-400 hover:text-indigo-600 p-1">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -103,11 +125,11 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, getDoc, serverTimestamp, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- Firebase 초기화 ---
+        // --- Firebase Configuration ---
         const firebaseConfig = JSON.parse(__firebase_config);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'tag-game-multiplayer-final';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'advanced-multi-tag-v2';
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -119,30 +141,28 @@
         let players = {};
         let gameState = { taggerId: null };
         let isGameStarted = false;
-        let isTaggerAssigning = false; // 중복 배정 방지 락
+        let lastTagAction = 0; // 태그 쿨타임
         
         let myProfile = {
-            nickname: localStorage.getItem('tag_nickname') || '익명',
-            color: '#3b82f6',
+            nickname: localStorage.getItem('tag_v2_nick') || '플레이어',
+            color: '#6366f1',
             shape: 'circle'
         };
 
-        const PLAYER_RADIUS = 20;
-        const NORMAL_SPEED = 4.5;
-        const TAGGER_SPEED = 5.2;
-        
-        let myPos = { x: 720, y: 80 };
-        const keys = { w: false, a: false, s: false, d: false };
+        const PLAYER_SIZE = 22;
+        const SPEED = { normal: 5, tagger: 5.8 };
+        let myPos = { x: 400, y: 350 };
+        const keys = {};
 
         const obstacles = [
-            { x: 200, y: 120, w: 400, h: 20 },
-            { x: 100, y: 220, w: 20, h: 260 },
-            { x: 680, y: 220, w: 20, h: 260 },
-            { x: 200, y: 560, w: 400, h: 20 },
-            { x: 325, y: 300, w: 150, h: 100 }
+            { x: 150, y: 150, w: 500, h: 25 },
+            { x: 150, y: 525, w: 500, h: 25 },
+            { x: 100, y: 200, w: 25, h: 300 },
+            { x: 675, y: 200, w: 25, h: 300 },
+            { x: 350, y: 300, w: 100, h: 100 }
         ];
 
-        async function init() {
+        async function start() {
             document.getElementById('nickname-input').value = myProfile.nickname;
             
             try {
@@ -151,329 +171,310 @@
                 } else {
                     await signInAnonymously(auth);
                 }
-            } catch (error) {
-                console.error("Auth Error", error);
-            }
+            } catch (e) { console.error(e); }
 
-            onAuthStateChanged(auth, (userData) => {
-                if (userData) {
-                    user = userData;
-                    document.getElementById('loading-overlay').classList.add('hidden');
-                    listenToGameState();
-                    listenToPlayers();
-                    listenToChat();
-                    startSync();
-                    requestAnimationFrame(gameLoop);
+            onAuthStateChanged(auth, (u) => {
+                if (u) {
+                    user = u;
+                    document.getElementById('loading-overlay').style.display = 'none';
+                    setupSync();
+                    gameLoop();
                 }
             });
         }
 
-        // 로비 UI 이벤트
-        document.querySelectorAll('.color-dot').forEach(dot => {
-            dot.addEventListener('click', () => {
+        // Lobby Logic
+        document.querySelectorAll('.color-dot').forEach(el => {
+            el.onclick = () => {
                 document.querySelector('.color-dot.active').classList.remove('active');
-                dot.classList.add('active');
-                myProfile.color = dot.dataset.color;
-            });
+                el.classList.add('active');
+                myProfile.color = el.dataset.color;
+            };
         });
 
-        document.querySelectorAll('.shape-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
+        document.querySelectorAll('.shape-btn').forEach(el => {
+            el.onclick = () => {
                 document.querySelector('.shape-btn.active').classList.remove('active');
-                btn.classList.add('active');
-                myProfile.shape = btn.dataset.shape;
-            });
+                el.classList.add('active');
+                myProfile.shape = el.dataset.shape;
+            };
         });
 
-        document.getElementById('start-game-btn').addEventListener('click', () => {
-            const nick = document.getElementById('nickname-input').value.trim();
-            myProfile.nickname = nick || '익명';
-            localStorage.setItem('tag_nickname', myProfile.nickname);
+        document.getElementById('start-game-btn').onclick = () => {
+            const n = document.getElementById('nickname-input').value.trim();
+            myProfile.nickname = n || '무명전사';
+            localStorage.setItem('tag_v2_nick', myProfile.nickname);
             
             isGameStarted = true;
-            document.getElementById('lobby-screen').classList.add('hidden');
+            document.getElementById('lobby-screen').classList.add('opacity-0', 'pointer-events-none');
             document.getElementById('back-to-lobby').classList.remove('hidden');
             
-            // 전장에 투입될 때 위치 초기화
+            // Initial spawn
             if (gameState.taggerId === user.uid) {
-                myPos = { x: 80, y: 620 };
+                myPos = { x: 100, y: 600 };
             } else {
-                myPos = { x: 720, y: 80 };
+                myPos = { x: 700, y: 100 };
             }
-        });
+        };
 
-        document.getElementById('back-to-lobby').addEventListener('click', () => {
+        document.getElementById('back-to-lobby').onclick = () => {
             isGameStarted = false;
-            document.getElementById('lobby-screen').classList.remove('hidden');
+            document.getElementById('lobby-screen').classList.remove('opacity-0', 'pointer-events-none');
             document.getElementById('back-to-lobby').classList.add('hidden');
-        });
+        };
 
-        function moveMyPlayer() {
-            if (!user || !isGameStarted) return;
+        // Network Sync (The "Server" part)
+        function setupSync() {
+            // 1. Game State Listener
+            onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'game', 'state'), (s) => {
+                if (s.exists()) {
+                    const oldTagger = gameState.taggerId;
+                    gameState = s.data();
+                    if (oldTagger !== gameState.taggerId && gameState.taggerId === user.uid) {
+                        // 내가 술래가 됨 -> 왼쪽 아래 스폰
+                        myPos = { x: 100, y: 600 };
+                    }
+                    updateUI();
+                } else {
+                    initGameState();
+                }
+            });
+
+            // 2. Players Listener
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'players'), (s) => {
+                const now = Date.now();
+                players = {};
+                s.docs.forEach(d => {
+                    const data = d.data();
+                    if (now - data.hb < 8000) players[d.id] = data;
+                });
+                document.getElementById('player-count').innerText = Object.keys(players).length;
+                
+                // 술래가 나갔다면 자동 선출
+                if (Object.keys(players).length > 0 && (!gameState.taggerId || !players[gameState.taggerId])) {
+                    setTagger(Object.keys(players).sort()[0]);
+                }
+            });
+
+            // 3. Heartbeat & Position Update
+            setInterval(() => {
+                if (!user) return;
+                setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', user.uid), {
+                    ...myProfile,
+                    x: myPos.x,
+                    y: myPos.y,
+                    active: isGameStarted,
+                    hb: Date.now()
+                }, { merge: true });
+            }, 60);
+
+            // 4. Chat Listener
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), (s) => {
+                const msgs = s.docs.map(d => d.data()).sort((a,b) => a.t - b.t);
+                const box = document.getElementById('chat-box');
+                box.innerHTML = '';
+                msgs.slice(-40).forEach(m => {
+                    const d = document.createElement('div');
+                    if (m.sys) {
+                        d.className = "text-[11px] font-black text-indigo-400 bg-indigo-50 p-2 rounded-xl text-center";
+                        d.innerHTML = `<i class="fas fa-bullhorn mr-2"></i>${m.txt}`;
+                    } else {
+                        const isMe = m.uid === user.uid;
+                        d.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'}`;
+                        d.innerHTML = `
+                            <span class="text-[9px] font-bold text-slate-400 mb-1 ml-1">${m.nick}</span>
+                            <div class="px-4 py-2 rounded-2xl text-sm font-medium shadow-sm border ${isMe ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-white text-slate-700 border-slate-100'}">${m.txt}</div>
+                        `;
+                    }
+                    box.appendChild(d);
+                });
+                box.scrollTop = box.scrollHeight;
+            });
+        }
+
+        async function initGameState() {
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'game', 'state'), { taggerId: user.uid });
+        }
+
+        async function setTagger(uid) {
+            if (Date.now() - lastTagAction < 1500) return; // 전역 태그 쿨타임
+            lastTagAction = Date.now();
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'game', 'state'), { taggerId: uid });
+        }
+
+        function updateUI() {
             const isTagger = gameState.taggerId === user.uid;
-            const currentSpeed = isTagger ? TAGGER_SPEED : NORMAL_SPEED;
+            const display = document.getElementById('my-role-display');
+            const info = document.getElementById('tagger-info');
             
-            let nextX = myPos.x;
-            let nextY = myPos.y;
+            if (!isGameStarted) {
+                display.innerText = "READY";
+                display.className = "font-black text-3xl text-slate-300 italic";
+                info.innerText = "입장 버튼을 눌러주세요";
+                return;
+            }
 
-            if (keys.w) nextY -= currentSpeed;
-            if (keys.s) nextY += currentSpeed;
-            if (keys.a) nextX -= currentSpeed;
-            if (keys.d) nextX += currentSpeed;
-
-            nextX = Math.max(PLAYER_RADIUS, Math.min(canvas.width - PLAYER_RADIUS, nextX));
-            nextY = Math.max(PLAYER_RADIUS, Math.min(canvas.height - PLAYER_RADIUS, nextY));
-
-            if (!isColliding(nextX, nextY)) {
-                myPos.x = nextX;
-                myPos.y = nextY;
+            if (isTagger) {
+                display.innerText = "TAGGER";
+                display.className = "font-black text-4xl text-red-500 animate-pulse italic tracking-tighter";
+                info.innerText = "다른 플레이어를 터치하세요!";
             } else {
-                if (!isColliding(nextX, myPos.y)) myPos.x = nextX;
-                else if (!isColliding(myPos.x, nextY)) myPos.y = nextY;
+                display.innerText = "RUNNER";
+                display.className = "font-black text-4xl text-indigo-600 italic tracking-tighter";
+                const tagger = players[gameState.taggerId];
+                info.innerText = tagger ? `${tagger.nickname}님이 쫓아오고 있습니다!` : "술래를 피하세요!";
             }
         }
 
-        function isColliding(px, py) {
-            for (const obs of obstacles) {
-                const closestX = Math.max(obs.x, Math.min(px, obs.x + obs.w));
-                const closestY = Math.max(obs.y, Math.min(py, obs.y + obs.h));
-                const dx = px - closestX;
-                const dy = py - closestY;
-                if ((dx * dx + dy * dy) < (PLAYER_RADIUS * PLAYER_RADIUS)) return true;
+        // Gameplay Logic
+        function move() {
+            if (!isGameStarted) return;
+            const isTagger = gameState.taggerId === user.uid;
+            const s = isTagger ? SPEED.tagger : SPEED.normal;
+            
+            let nx = myPos.x;
+            let ny = myPos.y;
+
+            if (keys['w'] || keys['arrowup']) ny -= s;
+            if (keys['s'] || keys['arrowdown']) ny += s;
+            if (keys['a'] || keys['arrowleft']) nx -= s;
+            if (keys['d'] || keys['arrowright']) nx += s;
+
+            nx = Math.max(PLAYER_SIZE, Math.min(canvas.width - PLAYER_SIZE, nx));
+            ny = Math.max(PLAYER_SIZE, Math.min(canvas.height - PLAYER_SIZE, ny));
+
+            if (!checkObstacles(nx, ny)) {
+                myPos.x = nx;
+                myPos.y = ny;
+            } else {
+                if (!checkObstacles(nx, myPos.y)) myPos.x = nx;
+                else if (!checkObstacles(myPos.x, ny)) myPos.y = ny;
+            }
+        }
+
+        function checkObstacles(px, py) {
+            for (const o of obstacles) {
+                const cx = Math.max(o.x, Math.min(px, o.x + o.w));
+                const cy = Math.max(o.y, Math.min(py, o.y + o.h));
+                const d = Math.sqrt((px - cx)**2 + (py - cy)**2);
+                if (d < PLAYER_SIZE) return true;
             }
             return false;
         }
 
-        function startSync() {
-            if (!user) return;
-            // 50ms마다 내 정보 업데이트
-            setInterval(async () => {
-                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'players', user.uid);
-                await setDoc(ref, {
-                    uid: user.uid,
-                    x: myPos.x,
-                    y: myPos.y,
-                    nickname: myProfile.nickname,
-                    color: myProfile.color,
-                    shape: myProfile.shape,
-                    isActive: isGameStarted,
-                    lastSeen: Date.now()
-                }, { merge: true });
-            }, 50);
-        }
-
-        function listenToPlayers() {
-            const col = collection(db, 'artifacts', appId, 'public', 'data', 'players');
-            onSnapshot(col, async (snapshot) => {
-                const now = Date.now();
-                const updated = {};
-                snapshot.docs.forEach(doc => {
-                    const data = doc.data();
-                    // 6초 이상 소식 없으면 오프라인 간주
-                    if (now - data.lastSeen < 6000) {
-                        updated[data.uid] = data;
-                    }
-                });
-                players = updated;
-                document.getElementById('player-count').innerText = `${Object.keys(players).length}명`;
-                
-                // 술래가 없거나 나갔다면 새로운 술래 선출 (가장 먼저 접속한 UID 기준)
-                if (Object.keys(players).length > 0 && (!gameState.taggerId || !players[gameState.taggerId])) {
-                    if (!isTaggerAssigning) {
-                        const sortedIds = Object.keys(players).sort();
-                        assignTagger(sortedIds[0]);
-                    }
-                }
-            }, (err) => console.error("Player List Error:", err));
-        }
-
-        function listenToGameState() {
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'status', 'current');
-            onSnapshot(docRef, (snapshot) => {
-                if (snapshot.exists()) {
-                    const prevTagger = gameState.taggerId;
-                    gameState = snapshot.data();
-                    
-                    // 술래가 나로 변경되었을 때 즉시 왼쪽 아래로 이동
-                    if (prevTagger !== gameState.taggerId && gameState.taggerId === user.uid) {
-                        myPos = { x: 80, y: 620 };
-                    }
-
-                    const isTagger = gameState.taggerId === user.uid;
-                    const display = document.getElementById('my-role-display');
-                    if (!isGameStarted) {
-                        display.innerText = "대기실 설정 중";
-                        display.className = "font-black text-2xl text-gray-300";
-                    } else {
-                        display.innerText = isTagger ? "당신은 술래!" : "도망치세요!";
-                        display.className = isTagger ? "font-black text-2xl text-red-500 animate-pulse" : "font-black text-2xl text-blue-500";
-                    }
-                }
-            }, (err) => console.error("Game State Error:", err));
-        }
-
-        async function assignTagger(uid) {
-            if (isTaggerAssigning) return;
-            isTaggerAssigning = true;
-            try {
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'status', 'current');
-                await setDoc(docRef, { taggerId: uid, lastTagTime: Date.now() });
-            } catch (e) {
-                console.error("Assign Tagger Error:", e);
-            } finally {
-                setTimeout(() => { isTaggerAssigning = false; }, 1000); // 연속 배정 방지 쿨다운
-            }
-        }
-
-        async function checkTagCollision() {
-            // 내가 술래이고 게임 중일 때만 체크
-            if (!user || !isGameStarted || gameState.taggerId !== user.uid) return;
-            
+        async function checkTag() {
+            if (gameState.taggerId !== user.uid || !isGameStarted) return;
             for (let id in players) {
-                if (id === user.uid || !players[id].isActive) continue;
-                
+                if (id === user.uid || !players[id].active) continue;
                 const p = players[id];
-                const dx = myPos.x - p.x;
-                const dy = myPos.y - p.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                
-                // 충돌 판정 (두 플레이어 반지름 합보다 작을 때)
-                if (dist < 38) {
-                    await assignTagger(id);
-                    await sendSystemMessage(`${p.nickname} 플레이어가 술래가 되었습니다!`);
+                const d = Math.sqrt((myPos.x - p.x)**2 + (myPos.y - p.y)**2);
+                if (d < PLAYER_SIZE * 2) {
+                    await setTagger(id);
+                    await sysMsg(`${p.nickname}님이 새로운 술래가 되었습니다!`);
                     break;
                 }
             }
         }
 
-        function listenToChat() {
-            const chatCol = collection(db, 'artifacts', appId, 'public', 'data', 'chat');
-            onSnapshot(chatCol, (snapshot) => {
-                // 실시간 동기화를 위해 전체 메시지를 읽어 시간순 정렬
-                const messages = snapshot.docs.map(doc => doc.data()).sort((a,b) => (a.time || 0) - (b.time || 0));
-                const chatBox = document.getElementById('chat-box');
-                chatBox.innerHTML = "";
-                messages.slice(-30).forEach(msg => {
-                    const div = document.createElement('div');
-                    if (msg.sender === 'SYSTEM') {
-                        div.className = "text-[11px] text-orange-400 font-bold text-center py-1 bg-orange-50/50 rounded-lg";
-                        div.innerText = `📢 ${msg.text}`;
-                    } else {
-                        div.className = "bg-white p-3 rounded-2xl shadow-sm border border-gray-50 mb-1";
-                        div.innerHTML = `<div class="text-[10px] font-black text-gray-300 mb-0.5">${msg.nickname}</div><div class="text-gray-700 leading-tight">${msg.text}</div>`;
-                    }
-                    chatBox.appendChild(div);
-                });
-                chatBox.scrollTop = chatBox.scrollHeight;
-            }, (err) => console.error("Chat Error:", err));
-        }
-
         async function sendChat() {
-            const input = document.getElementById('chat-input');
-            const text = input.value.trim();
-            if (!text || !user) return;
-            input.value = "";
-            try {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
-                    sender: user.uid, nickname: myProfile.nickname, text: text, time: Date.now()
-                });
-            } catch (e) { console.error("Send Chat Error:", e); }
+            const i = document.getElementById('chat-input');
+            const v = i.value.trim();
+            if (!v || !user) return;
+            i.value = '';
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
+                uid: user.uid, nick: myProfile.nickname, txt: v, t: Date.now()
+            });
         }
 
-        async function sendSystemMessage(text) {
-            try {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
-                    sender: 'SYSTEM', text: text, time: Date.now()
-                });
-            } catch (e) { console.error("System Msg Error:", e); }
+        async function sysMsg(txt) {
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
+                sys: true, txt, t: Date.now()
+            });
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // 지형 그리기
-            ctx.fillStyle = "#f8fafc";
-            ctx.strokeStyle = "#f1f5f9";
-            ctx.lineWidth = 2;
-            obstacles.forEach(obs => {
+            // Obstacles
+            ctx.fillStyle = "#ffffff";
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "rgba(0,0,0,0.03)";
+            obstacles.forEach(o => {
                 ctx.beginPath();
-                ctx.roundRect(obs.x, obs.y, obs.w, obs.h, 8);
+                ctx.roundRect(o.x, o.y, o.w, o.h, 12);
                 ctx.fill();
+                ctx.strokeStyle = "#f1f5f9";
+                ctx.lineWidth = 2;
                 ctx.stroke();
             });
+            ctx.shadowBlur = 0;
 
-            // 플레이어 그리기
+            // Players
             for (let id in players) {
                 const p = players[id];
-                // 활성화되지 않은 플레이어는 그리지 않음 (로비에 있는 사람)
-                if (!p.isActive && id !== user.uid) continue;
+                if (!p.active && id !== user.uid) continue;
                 if (id === user.uid && !isGameStarted) continue;
 
-                // 내 위치는 서버 지연 방지를 위해 로컬 좌표 사용
-                const drawPos = (id === user.uid) ? myPos : p;
+                const isMe = id === user.uid;
                 const isTagger = gameState.taggerId === id;
+                const pos = isMe ? myPos : p;
 
-                // 그림자
+                // Name
+                ctx.fillStyle = isTagger ? "#ef4444" : "#475569";
+                ctx.font = `black 12px Pretendard`;
+                ctx.textAlign = "center";
+                ctx.fillText(p.nickname, pos.x, pos.y - 35);
+
+                // Shadow
                 ctx.beginPath();
-                ctx.ellipse(drawPos.x, drawPos.y + 12, 12, 5, 0, 0, Math.PI * 2);
-                ctx.fillStyle = "rgba(0,0,0,0.05)";
+                ctx.ellipse(pos.x, pos.y + 15, 12, 4, 0, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(0,0,0,0.06)";
                 ctx.fill();
 
-                // 몸체
-                ctx.fillStyle = isTagger ? "#ef4444" : (p.color || '#3b82f6');
+                // Character
+                ctx.fillStyle = isTagger ? "#ef4444" : p.color;
                 ctx.beginPath();
                 if (p.shape === 'square') {
-                    ctx.roundRect(drawPos.x - PLAYER_RADIUS, drawPos.y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2, 6);
+                    ctx.roundRect(pos.x - PLAYER_SIZE, pos.y - PLAYER_SIZE, PLAYER_SIZE * 2, PLAYER_SIZE * 2, 8);
                 } else {
-                    ctx.arc(drawPos.x, drawPos.y, PLAYER_RADIUS, 0, Math.PI * 2);
+                    ctx.arc(pos.x, pos.y, PLAYER_SIZE, 0, Math.PI * 2);
                 }
                 ctx.fill();
-                
-                // 닉네임
-                ctx.fillStyle = "#334155";
-                ctx.font = "bold 12px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText(p.nickname || "익명", drawPos.x, drawPos.y - 32);
 
-                // 술래 이펙트
+                // Detail
                 if (isTagger) {
                     ctx.strokeStyle = "white";
-                    ctx.lineWidth = 4;
+                    ctx.lineWidth = 5;
                     ctx.stroke();
+                    // Glow
                     ctx.beginPath();
-                    ctx.arc(drawPos.x, drawPos.y, PLAYER_RADIUS + 6, 0, Math.PI * 2);
-                    ctx.strokeStyle = "rgba(239, 68, 68, 0.3)";
+                    ctx.arc(pos.x, pos.y, PLAYER_SIZE + 8, 0, Math.PI * 2);
+                    ctx.strokeStyle = "rgba(239, 68, 68, 0.2)";
                     ctx.lineWidth = 2;
+                    ctx.stroke();
+                } else if (isMe) {
+                    ctx.strokeStyle = "white";
+                    ctx.lineWidth = 3;
                     ctx.stroke();
                 }
             }
         }
 
         function gameLoop() {
-            moveMyPlayer();
-            checkTagCollision();
+            move();
+            checkTag();
             draw();
             requestAnimationFrame(gameLoop);
         }
 
-        window.addEventListener('keydown', (e) => {
-            const key = e.key.toLowerCase();
-            if (keys.hasOwnProperty(key)) {
-                keys[key] = true;
-                if (['w', 'a', 's', 'd'].includes(key)) e.preventDefault();
-            }
-        });
-
-        window.addEventListener('keyup', (e) => {
-            const key = e.key.toLowerCase();
-            if (keys.hasOwnProperty(key)) keys[key] = false;
-        });
-
-        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+        window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
+        window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+        document.getElementById('chat-input').onkeydown = (e) => {
             if (e.key === 'Enter') sendChat();
-        });
+            e.stopPropagation();
+        };
 
-        init();
+        start();
     </script>
 </body>
 </html>
