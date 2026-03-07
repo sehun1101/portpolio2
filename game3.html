@@ -3,273 +3,354 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>멀티플레이어 TDS</title>
+    <title>멀티플레이어 술래잡기: 광활한 맵 에디션</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background-color: #1a202c; color: white; user-select: none; }
-        #game-container { width: 950px; height: 600px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        body { background-color: #1a202c; color: white; user-select: none; overflow: hidden; }
+        #game-container { width: 1100px; height: 700px; box-shadow: 0 0 25px rgba(0,0,0,0.6); }
         #chat-box::-webkit-scrollbar { width: 4px; }
         #chat-box::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 2px; }
+        canvas { background-image: radial-gradient(#2d3748 1px, transparent 1px); background-size: 40px 40px; }
     </style>
 </head>
-<body class="h-screen w-screen flex items-center justify-center overflow-hidden flex-col">
+<body class="h-screen w-screen flex items-center justify-center flex-col">
 
     <div class="mb-2 text-center">
-        <h1 class="text-2xl font-bold text-yellow-400 tracking-tighter">CO-OP TOWER DEFENSE</h1>
-        <p class="text-gray-400 text-xs">다른 플레이어와 함께 기지를 지키세요!</p>
+        <h1 class="text-3xl font-black text-red-500 tracking-tighter italic uppercase drop-shadow-lg">Tag: Wide Arena</h1>
+        <p class="text-gray-400 text-sm">WASD로 이동 | 술래는 왼쪽 아래, 플레이어는 오른쪽 위에서 시작합니다!</p>
     </div>
 
-    <!-- 게임 컨테이너 -->
-    <div class="relative bg-gray-900 rounded-xl overflow-hidden flex" id="game-container">
-        
-        <!-- 왼쪽: 캔버스 영역 -->
+    <div class="relative bg-gray-900 rounded-2xl overflow-hidden flex border-4 border-gray-800" id="game-container">
+        <!-- 왼쪽: 확장된 캔버스 영역 -->
         <div class="relative">
-            <canvas id="gameCanvas" width="600" height="600" class="bg-green-800"></canvas>
-            <!-- 오버레이 안내 -->
-            <div id="loading-overlay" class="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
+            <canvas id="gameCanvas" width="800" height="700" class="bg-gray-800"></canvas>
+            <div id="loading-overlay" class="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
                 <div class="text-center">
-                    <i class="fas fa-spinner fa-spin text-4xl mb-2"></i>
-                    <p id="loading-text">서버 연결 중...</p>
+                    <i class="fas fa-ghost fa-spin text-5xl text-red-500 mb-4"></i>
+                    <p id="loading-text" class="text-xl font-bold">전장 진입 중...</p>
                 </div>
             </div>
         </div>
 
-        <!-- 중앙: 상점 및 상태 -->
-        <div class="w-[150px] bg-gray-800 border-l border-gray-700 flex flex-col">
-            <div class="p-3 bg-black/30 border-b border-gray-700">
-                <div class="flex items-center text-red-400 font-bold mb-1"><i class="fas fa-heart mr-2"></i><span id="health-ui">100</span></div>
-                <div class="flex items-center text-yellow-400 font-bold mb-1"><i class="fas fa-coins mr-2"></i><span id="cash-ui">300</span></div>
+        <!-- 오른쪽: 정보 및 채팅창 -->
+        <div class="w-[300px] bg-gray-950 flex flex-col border-l border-gray-800">
+            <div class="p-5 bg-gray-900 border-b border-gray-800 shadow-inner">
+                <div class="text-xs text-gray-500 uppercase tracking-widest mb-1">상태</div>
+                <div class="flex items-center justify-between">
+                    <span id="my-role-display" class="font-black text-xl text-blue-400">플레이어</span>
+                    <span id="my-id-display" class="text-xs text-gray-600 font-mono">ID: ...</span>
+                </div>
             </div>
-            <div class="flex-1 p-2 overflow-y-auto space-y-2">
-                <button class="tower-btn w-full bg-gray-700 p-2 rounded hover:bg-gray-600 transition border-2 border-transparent" data-type="scout">
-                    <div class="text-xs font-bold">정찰병 ($100)</div>
-                </button>
-                <button class="tower-btn w-full bg-gray-700 p-2 rounded hover:bg-gray-600 transition border-2 border-transparent" data-type="sniper">
-                    <div class="text-xs font-bold">스나이퍼 ($250)</div>
-                </button>
-            </div>
-            <div class="p-2 border-t border-gray-700 text-[10px] text-gray-400 text-center">
-                접속 ID: <span id="my-id-display">...</span>
-            </div>
-        </div>
 
-        <!-- 오른쪽: 채팅창 -->
-        <div class="w-[200px] bg-gray-950 flex flex-col border-l border-gray-800">
-            <div class="p-2 bg-gray-900 text-xs font-bold text-gray-400 border-b border-gray-800">멀티플레이어 채팅</div>
-            <div id="chat-box" class="flex-1 p-2 overflow-y-auto text-xs space-y-1 text-left"></div>
-            <div class="p-2 border-t border-gray-800">
-                <input type="text" id="chat-input" placeholder="메시지 입력..." class="w-full bg-gray-800 text-xs p-2 rounded outline-none focus:ring-1 ring-yellow-500">
+            <div class="p-3 bg-gray-900/50 text-xs font-bold text-gray-500 border-b border-gray-800 flex justify-between items-center">
+                <span class="flex items-center"><i class="fas fa-comments mr-2"></i>채팅</span>
+                <span id="player-count" class="bg-green-900/50 text-green-400 px-2 py-0.5 rounded-full text-[10px]">0명 접속</span>
+            </div>
+            <div id="chat-box" class="flex-1 p-3 overflow-y-auto text-sm space-y-2 text-left bg-black/20"></div>
+            <div class="p-3 border-t border-gray-800 bg-gray-900">
+                <input type="text" id="chat-input" placeholder="메시지를 입력하세요..." class="w-full bg-gray-800 text-sm p-3 rounded-lg outline-none focus:ring-2 ring-red-600 transition-all">
             </div>
         </div>
     </div>
 
-    <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- 환경 변수 및 Firebase 초기화 ---
+        // --- 초기화 ---
         const firebaseConfig = JSON.parse(__firebase_config);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'multiplayer-td-demo';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'multiplayer-tag-v2';
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- 게임 상수 및 상태 ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const CELL_SIZE = 50;
         
         let user = null;
-        let cash = 300;
-        let health = 100;
-        let towers = [];
-        let selectedTowerType = null;
-        let mouseX = 0, mouseY = 0;
+        let players = {};
+        let gameState = { taggerId: null };
+        
+        const PLAYER_RADIUS = 20;
+        const NORMAL_SPEED = 4.2;
+        const TAGGER_SPEED = 4.8;
+        
+        // 내 로컬 위치 초기화 (오른쪽 위 기본)
+        let myPos = { x: 750, y: 50 };
+        const keys = { w: false, a: false, s: false, d: false };
 
-        const TOWER_TYPES = {
-            scout: { cost: 100, range: 100, damage: 10, color: '#3b82f6', rate: 30 },
-            sniper: { cost: 250, range: 250, damage: 50, color: '#a855f7', rate: 100 }
-        };
+        // 지형지물 배치 (스폰 지역인 왼쪽 아래와 오른쪽 위를 피해서 배치)
+        const obstacles = [
+            { x: 200, y: 100, w: 400, h: 20 },
+            { x: 100, y: 200, w: 20, h: 300 },
+            { x: 680, y: 200, w: 20, h: 300 },
+            { x: 200, y: 580, w: 400, h: 20 },
+            { x: 300, y: 300, w: 200, h: 100 }, // 중앙 거대 장애물
+            { x: 200, y: 450, w: 100, h: 20 },
+            { x: 500, y: 230, w: 100, h: 20 }
+        ];
 
-        const pathCells = new Set(["0,2","1,2","2,2","3,2","4,2","5,2","6,2","7,2","8,2","8,3","8,4","8,5","8,6","8,7","8,8","7,8","6,8","5,8","4,8","3,8","2,8","2,9","2,10","2,11"]);
-
-        // --- 초기화 및 인증 (MANDATORY RULE 3 준수) ---
         async function init() {
             try {
-                // 커스텀 토큰이 있으면 사용, 없으면 익명 로그인
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
                     await signInAnonymously(auth);
                 }
             } catch (error) {
-                console.error("Authentication failed:", error);
-                document.getElementById('loading-text').innerText = "인증 오류가 발생했습니다.";
+                console.error("Auth Error:", error);
+                document.getElementById('loading-text').innerText = "접속 불가";
                 return;
             }
 
-            onAuthStateChanged(auth, (userData) => {
+            onAuthStateChanged(auth, async (userData) => {
                 if (userData) {
                     user = userData;
                     document.getElementById('my-id-display').innerText = user.uid.substring(0, 6);
                     document.getElementById('loading-overlay').classList.add('hidden');
                     
-                    // 인증 후 리스너 시작 (RULE 3 준수)
-                    listenToTowers();
+                    // 게임 데이터 감시 시작
+                    listenToGameState();
+                    listenToPlayers();
                     listenToChat();
-                    gameLoop();
+                    
+                    // 위치 동기화 루프
+                    syncPresence();
+                    
+                    requestAnimationFrame(gameLoop);
                 }
             });
         }
 
-        // --- 타워 공유 로직 (RULE 1 준수) ---
-        function listenToTowers() {
+        // --- 이동 및 충돌 처리 ---
+        function moveMyPlayer() {
             if (!user) return;
-            const towersCol = collection(db, 'artifacts', appId, 'public', 'data', 'towers');
-            onSnapshot(towersCol, (snapshot) => {
-                towers = snapshot.docs.map(doc => doc.data());
-            }, (err) => {
-                console.error("Towers listen error:", err);
+            const isTagger = gameState.taggerId === user.uid;
+            const currentSpeed = isTagger ? TAGGER_SPEED : NORMAL_SPEED;
+            
+            let nextX = myPos.x;
+            let nextY = myPos.y;
+
+            if (keys.w) nextY -= currentSpeed;
+            if (keys.s) nextY += currentSpeed;
+            if (keys.a) nextX -= currentSpeed;
+            if (keys.d) nextX += currentSpeed;
+
+            // 맵 경계
+            nextX = Math.max(PLAYER_RADIUS, Math.min(canvas.width - PLAYER_RADIUS, nextX));
+            nextY = Math.max(PLAYER_RADIUS, Math.min(canvas.height - PLAYER_RADIUS, nextY));
+
+            // 지형지물 충돌 (미끄러짐 구현)
+            if (!isColliding(nextX, nextY)) {
+                myPos.x = nextX;
+                myPos.y = nextY;
+            } else {
+                if (!isColliding(nextX, myPos.y)) myPos.x = nextX;
+                else if (!isColliding(myPos.x, nextY)) myPos.y = nextY;
+            }
+        }
+
+        function isColliding(px, py) {
+            for (const obs of obstacles) {
+                const closestX = Math.max(obs.x, Math.min(px, obs.x + obs.w));
+                const closestY = Math.max(obs.y, Math.min(py, obs.y + obs.h));
+                const dx = px - closestX;
+                const dy = py - closestY;
+                if ((dx * dx + dy * dy) < (PLAYER_RADIUS * PLAYER_RADIUS)) return true;
+            }
+            return false;
+        }
+
+        // --- 네트워크 동기화 ---
+        async function syncPresence() {
+            if (!user) return;
+            // 최초 접속 시 역할에 따른 위치 설정 (이미 게임 중인 경우 반영 위해 리스너 내부에서 처리해도 되지만 초기값 설정)
+            setInterval(async () => {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'players', user.uid);
+                await setDoc(ref, {
+                    uid: user.uid,
+                    x: myPos.x,
+                    y: myPos.y,
+                    lastSeen: Date.now()
+                }, { merge: true });
+            }, 60);
+        }
+
+        function listenToPlayers() {
+            const col = collection(db, 'artifacts', appId, 'public', 'data', 'players');
+            onSnapshot(col, (snapshot) => {
+                const now = Date.now();
+                const updatedPlayers = {};
+                snapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    if (now - data.lastSeen < 10000) {
+                        updatedPlayers[data.uid] = data;
+                    }
+                });
+                players = updatedPlayers;
+                document.getElementById('player-count').innerText = `${Object.keys(players).length}명 접속`;
+                
+                // 술래가 없고 내가 방장이거나 첫 번째 플레이어라면 술래 배정
+                if (Object.keys(players).length > 0 && !gameState.taggerId) {
+                    assignTagger(Object.keys(players)[0]);
+                }
             });
         }
 
-        async function placeTower(gx, gy) {
-            if (!user || !selectedTowerType) return;
-            const typeData = TOWER_TYPES[selectedTowerType];
-            if (cash < typeData.cost) return;
+        function listenToGameState() {
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'status', 'current');
+            onSnapshot(docRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const oldTagger = gameState.taggerId;
+                    gameState = snapshot.data();
+                    
+                    // 술래가 바뀌었을 때 초기 위치 강제 이동 (처음 지정되었을 때만)
+                    if (oldTagger !== gameState.taggerId && gameState.taggerId === user.uid) {
+                        // 술래가 되면 왼쪽 아래로
+                        myPos = { x: 50, y: 650 };
+                    } else if (oldTagger !== gameState.taggerId && oldTagger === user.uid) {
+                        // 술래에서 풀려나면 오른쪽 위로
+                        myPos = { x: 750, y: 50 };
+                    }
 
-            const cellKey = `${gx},${gy}`;
-            if (pathCells.has(cellKey)) return;
-            if (towers.some(t => t.gx === gx && t.gy === gy)) return;
-
-            cash -= typeData.cost;
-            document.getElementById('cash-ui').innerText = cash;
-
-            const towerData = {
-                gx, gy,
-                type: selectedTowerType,
-                owner: user.uid,
-                placedAt: Date.now()
-            };
-
-            try {
-                // RULE 1: 정확한 경로 사용
-                const towerDoc = doc(db, 'artifacts', appId, 'public', 'data', 'towers', `${gx}_${gy}`);
-                await setDoc(towerDoc, towerData);
-                selectedTowerType = null;
-                document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('border-yellow-500'));
-            } catch (e) { console.error("Place tower error:", e); }
+                    const isTagger = gameState.taggerId === user.uid;
+                    const display = document.getElementById('my-role-display');
+                    display.innerText = isTagger ? "당신은 술래!" : "도망치세요!";
+                    display.className = isTagger ? "font-black text-xl text-red-500 animate-pulse" : "font-black text-xl text-blue-400";
+                }
+            });
         }
 
-        // --- 채팅 로직 (RULE 1, RULE 2 준수) ---
+        async function assignTagger(uid) {
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'status', 'current'), { 
+                taggerId: uid, 
+                lastTagTime: Date.now() 
+            });
+        }
+
+        async function checkTagCollision() {
+            if (!user || gameState.taggerId !== user.uid) return;
+            for (let id in players) {
+                if (id === user.uid) continue;
+                const p = players[id];
+                const dist = Math.sqrt((myPos.x - p.x)**2 + (myPos.y - p.y)**2);
+                if (dist < 38) {
+                    await assignTagger(id);
+                    await sendSystemMessage(`${id.substring(0,4)} 플레이어가 술래가 되었습니다!`);
+                    break;
+                }
+            }
+        }
+
+        // --- 채팅 ---
         function listenToChat() {
-            if (!user) return;
             const chatCol = collection(db, 'artifacts', appId, 'public', 'data', 'chat');
             onSnapshot(chatCol, (snapshot) => {
                 const messages = snapshot.docs.map(doc => doc.data());
-                // RULE 2: 클라이언트 사이드 정렬
                 messages.sort((a, b) => (a.time || 0) - (b.time || 0));
-                
                 const chatBox = document.getElementById('chat-box');
                 chatBox.innerHTML = "";
-                messages.slice(-30).forEach(msg => {
+                messages.slice(-25).forEach(msg => {
                     const div = document.createElement('div');
-                    div.className = "break-words";
-                    div.innerHTML = `<span class="text-blue-400 font-bold">${(msg.sender || "").substring(0,4)}:</span> ${msg.text}`;
+                    const isSystem = msg.sender === 'SYSTEM';
+                    div.className = isSystem ? "bg-yellow-900/20 p-2 rounded text-yellow-500 text-xs italic text-center" : "bg-gray-800/50 p-2 rounded-lg";
+                    div.innerHTML = isSystem 
+                        ? `[알림] ${msg.text}`
+                        : `<span class="text-blue-400 font-bold mr-1">${(msg.sender || "").substring(0,4)}:</span> <span class="text-gray-200">${msg.text}</span>`;
                     chatBox.appendChild(div);
                 });
                 chatBox.scrollTop = chatBox.scrollHeight;
-            }, (err) => console.error("Chat listen error:", err));
+            });
         }
 
         async function sendChat() {
-            if (!user) return;
             const input = document.getElementById('chat-input');
             const text = input.value.trim();
-            if (!text) return;
+            if (!text || !user) return;
             input.value = "";
-            try {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
-                    sender: user.uid,
-                    text: text,
-                    time: Date.now()
-                });
-            } catch (e) { console.error("Send chat error:", e); }
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
+                sender: user.uid, text: text, time: Date.now()
+            });
         }
 
-        // --- 게임 엔진 ---
-        function drawMap() {
-            ctx.fillStyle = "#166534"; 
-            ctx.fillRect(0,0,600,600);
-            
-            ctx.fillStyle = "#92400e"; 
-            pathCells.forEach(cell => {
-                const [x, y] = cell.split(',').map(Number);
-                ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        async function sendSystemMessage(text) {
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
+                sender: 'SYSTEM', text: text, time: Date.now()
             });
+        }
+
+        // --- 렌더링 ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 지형지물
+            ctx.fillStyle = "#334155";
+            ctx.strokeStyle = "#475569";
+            ctx.lineWidth = 3;
+            obstacles.forEach(obs => {
+                ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+            });
+
+            // 플레이어들
+            for (let id in players) {
+                const p = (id === user.uid) ? myPos : players[id];
+                const isTagger = gameState.taggerId === id;
+                const isMe = id === user.uid;
+
+                // 그림자 효과
+                ctx.beginPath();
+                ctx.ellipse(p.x, p.y + 10, 15, 8, 0, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(0,0,0,0.3)";
+                ctx.fill();
+
+                // 캐릭터 본체
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, PLAYER_RADIUS, 0, Math.PI * 2);
+                ctx.fillStyle = isTagger ? "#ef4444" : (isMe ? "#3b82f6" : "#4ade80");
+                ctx.fill();
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                // 술래 후광
+                if (isTagger) {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, PLAYER_RADIUS + 5, 0, Math.PI * 2);
+                    ctx.strokeStyle = "rgba(239, 68, 68, 0.5)";
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                ctx.fillStyle = "white";
+                ctx.font = "bold 11px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText(isMe ? "나" : id.substring(0, 4), p.x, p.y + 38);
+            }
         }
 
         function gameLoop() {
-            if (!user) return;
-            ctx.clearRect(0,0,600,600);
-            drawMap();
-
-            towers.forEach(t => {
-                const data = TOWER_TYPES[t.type];
-                if (!data) return;
-                ctx.fillStyle = data.color;
-                ctx.beginPath();
-                ctx.arc(t.gx*CELL_SIZE + 25, t.gy*CELL_SIZE + 25, 18, 0, Math.PI*2);
-                ctx.fill();
-                ctx.strokeStyle = "white";
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                
-                ctx.fillStyle = "white";
-                ctx.font = "8px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText((t.owner || "").substring(0,4), t.gx*CELL_SIZE + 25, t.gy*CELL_SIZE + 42);
-            });
-
-            if (selectedTowerType) {
-                const gx = Math.floor(mouseX / CELL_SIZE);
-                const gy = Math.floor(mouseY / CELL_SIZE);
-                const data = TOWER_TYPES[selectedTowerType];
-                
-                ctx.fillStyle = "rgba(255,255,255,0.2)";
-                ctx.beginPath();
-                ctx.arc(gx*CELL_SIZE+25, gy*CELL_SIZE+25, data.range, 0, Math.PI*2);
-                ctx.fill();
-
-                ctx.fillStyle = (pathCells.has(`${gx},${gy}`) || towers.some(t => t.gx === gx && t.gy === gy)) ? "rgba(255,0,0,0.5)" : "rgba(255,255,255,0.5)";
-                ctx.fillRect(gx*CELL_SIZE, gy*CELL_SIZE, CELL_SIZE, CELL_SIZE);
-            }
-
+            moveMyPlayer();
+            checkTagCollision();
+            draw();
             requestAnimationFrame(gameLoop);
         }
 
-        // --- 이벤트 리스너 ---
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mouseX = e.clientX - rect.left;
-            mouseY = e.clientY - rect.top;
+        // --- 컨트롤러 ---
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (keys.hasOwnProperty(key)) {
+                keys[key] = true;
+                if (['w', 'a', 's', 'd'].includes(key)) e.preventDefault();
+            }
         });
 
-        canvas.addEventListener('click', () => {
-            const gx = Math.floor(mouseX / CELL_SIZE);
-            const gy = Math.floor(mouseY / CELL_SIZE);
-            placeTower(gx, gy);
-        });
-
-        document.querySelectorAll('.tower-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                selectedTowerType = e.currentTarget.dataset.type;
-                document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('border-yellow-500'));
-                e.currentTarget.classList.add('border-yellow-500');
-            });
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (keys.hasOwnProperty(key)) keys[key] = false;
         });
 
         document.getElementById('chat-input').addEventListener('keypress', (e) => {
