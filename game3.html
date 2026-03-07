@@ -18,7 +18,7 @@
 
     <div class="mb-2 text-center">
         <h1 class="text-3xl font-black text-red-500 tracking-tighter italic uppercase drop-shadow-lg">Tag: Wide Arena</h1>
-        <p class="text-gray-400 text-sm">WASD로 이동 | 술래는 왼쪽 아래, 플레이어는 오른쪽 위에서 시작합니다!</p>
+        <p class="text-gray-400 text-sm">WASD로 이동 | 술래는 빨간색, 플레이어는 초록/파란색입니다!</p>
     </div>
 
     <div class="relative bg-gray-900 rounded-2xl overflow-hidden flex border-4 border-gray-800" id="game-container">
@@ -57,11 +57,11 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- 초기화 ---
+        // --- Firebase 초기화 ---
         const firebaseConfig = JSON.parse(__firebase_config);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'multiplayer-tag-v2';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'multiplayer-tag-v2-fixed';
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -72,22 +72,22 @@
         let user = null;
         let players = {};
         let gameState = { taggerId: null };
+        let isTaggerLocked = false; // 술래 중복 배정 방지 락
         
         const PLAYER_RADIUS = 20;
         const NORMAL_SPEED = 4.2;
         const TAGGER_SPEED = 4.8;
         
-        // 내 로컬 위치 초기화 (오른쪽 위 기본)
-        let myPos = { x: 750, y: 50 };
+        // 내 위치 초기 설정
+        let myPos = { x: 700, y: 100 };
         const keys = { w: false, a: false, s: false, d: false };
 
-        // 지형지물 배치 (스폰 지역인 왼쪽 아래와 오른쪽 위를 피해서 배치)
         const obstacles = [
             { x: 200, y: 100, w: 400, h: 20 },
             { x: 100, y: 200, w: 20, h: 300 },
             { x: 680, y: 200, w: 20, h: 300 },
             { x: 200, y: 580, w: 400, h: 20 },
-            { x: 300, y: 300, w: 200, h: 100 }, // 중앙 거대 장애물
+            { x: 300, y: 300, w: 200, h: 100 },
             { x: 200, y: 450, w: 100, h: 20 },
             { x: 500, y: 230, w: 100, h: 20 }
         ];
@@ -101,7 +101,7 @@
                 }
             } catch (error) {
                 console.error("Auth Error:", error);
-                document.getElementById('loading-text').innerText = "접속 불가";
+                document.getElementById('loading-text').innerText = "인증 오류";
                 return;
             }
 
@@ -111,12 +111,15 @@
                     document.getElementById('my-id-display').innerText = user.uid.substring(0, 6);
                     document.getElementById('loading-overlay').classList.add('hidden');
                     
-                    // 게임 데이터 감시 시작
+                    // 초기 스폰 위치 설정 (술래 여부 확인 전까지는 오른쪽 위)
+                    myPos = { x: 700 + Math.random() * 50, y: 100 + Math.random() * 50 };
+
+                    // 리스너 등록
                     listenToGameState();
                     listenToPlayers();
                     listenToChat();
                     
-                    // 위치 동기화 루프
+                    // 존재 알림 시작
                     syncPresence();
                     
                     requestAnimationFrame(gameLoop);
@@ -124,7 +127,6 @@
             });
         }
 
-        // --- 이동 및 충돌 처리 ---
         function moveMyPlayer() {
             if (!user) return;
             const isTagger = gameState.taggerId === user.uid;
@@ -138,11 +140,9 @@
             if (keys.a) nextX -= currentSpeed;
             if (keys.d) nextX += currentSpeed;
 
-            // 맵 경계
             nextX = Math.max(PLAYER_RADIUS, Math.min(canvas.width - PLAYER_RADIUS, nextX));
             nextY = Math.max(PLAYER_RADIUS, Math.min(canvas.height - PLAYER_RADIUS, nextY));
 
-            // 지형지물 충돌 (미끄러짐 구현)
             if (!isColliding(nextX, nextY)) {
                 myPos.x = nextX;
                 myPos.y = nextY;
@@ -163,10 +163,8 @@
             return false;
         }
 
-        // --- 네트워크 동기화 ---
         async function syncPresence() {
             if (!user) return;
-            // 최초 접속 시 역할에 따른 위치 설정 (이미 게임 중인 경우 반영 위해 리스너 내부에서 처리해도 되지만 초기값 설정)
             setInterval(async () => {
                 const ref = doc(db, 'artifacts', appId, 'public', 'data', 'players', user.uid);
                 await setDoc(ref, {
@@ -175,26 +173,33 @@
                     y: myPos.y,
                     lastSeen: Date.now()
                 }, { merge: true });
-            }, 60);
+            }, 50);
         }
 
         function listenToPlayers() {
             const col = collection(db, 'artifacts', appId, 'public', 'data', 'players');
-            onSnapshot(col, (snapshot) => {
+            onSnapshot(col, async (snapshot) => {
                 const now = Date.now();
                 const updatedPlayers = {};
                 snapshot.docs.forEach(doc => {
                     const data = doc.data();
-                    if (now - data.lastSeen < 10000) {
+                    if (now - data.lastSeen < 8000) {
                         updatedPlayers[data.uid] = data;
                     }
                 });
                 players = updatedPlayers;
-                document.getElementById('player-count').innerText = `${Object.keys(players).length}명 접속`;
+                const pCount = Object.keys(players).length;
+                document.getElementById('player-count').innerText = `${pCount}명 접속`;
                 
-                // 술래가 없고 내가 방장이거나 첫 번째 플레이어라면 술래 배정
-                if (Object.keys(players).length > 0 && !gameState.taggerId) {
-                    assignTagger(Object.keys(players)[0]);
+                // 만약 현재 술래가 맵에 없다면 (오프라인 등), 새로 배정 시도
+                if (pCount > 0 && (!gameState.taggerId || !players[gameState.taggerId])) {
+                    if (!isTaggerLocked) {
+                        isTaggerLocked = true;
+                        // 가장 먼저 접속된 UID 순으로 정렬하여 일관성 있게 배정
+                        const sortedIds = Object.keys(players).sort();
+                        await assignTagger(sortedIds[0]);
+                        isTaggerLocked = false;
+                    }
                 }
             });
         }
@@ -206,13 +211,12 @@
                     const oldTagger = gameState.taggerId;
                     gameState = snapshot.data();
                     
-                    // 술래가 바뀌었을 때 초기 위치 강제 이동 (처음 지정되었을 때만)
-                    if (oldTagger !== gameState.taggerId && gameState.taggerId === user.uid) {
-                        // 술래가 되면 왼쪽 아래로
-                        myPos = { x: 50, y: 650 };
-                    } else if (oldTagger !== gameState.taggerId && oldTagger === user.uid) {
-                        // 술래에서 풀려나면 오른쪽 위로
-                        myPos = { x: 750, y: 50 };
+                    if (oldTagger !== gameState.taggerId) {
+                        if (gameState.taggerId === user.uid) {
+                            myPos = { x: 80, y: 620 }; // 술래 스폰 (좌하단)
+                        } else if (oldTagger === user.uid) {
+                            myPos = { x: 720, y: 80 }; // 일반 스폰 (우상단)
+                        }
                     }
 
                     const isTagger = gameState.taggerId === user.uid;
@@ -224,10 +228,12 @@
         }
 
         async function assignTagger(uid) {
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'status', 'current'), { 
-                taggerId: uid, 
-                lastTagTime: Date.now() 
-            });
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'status', 'current');
+                await setDoc(docRef, { taggerId: uid, lastTagTime: Date.now() });
+            } catch (e) {
+                console.error("Assign Tagger Error:", e);
+            }
         }
 
         async function checkTagCollision() {
@@ -244,7 +250,6 @@
             }
         }
 
-        // --- 채팅 ---
         function listenToChat() {
             const chatCol = collection(db, 'artifacts', appId, 'public', 'data', 'chat');
             onSnapshot(chatCol, (snapshot) => {
@@ -252,7 +257,7 @@
                 messages.sort((a, b) => (a.time || 0) - (b.time || 0));
                 const chatBox = document.getElementById('chat-box');
                 chatBox.innerHTML = "";
-                messages.slice(-25).forEach(msg => {
+                messages.slice(-20).forEach(msg => {
                     const div = document.createElement('div');
                     const isSystem = msg.sender === 'SYSTEM';
                     div.className = isSystem ? "bg-yellow-900/20 p-2 rounded text-yellow-500 text-xs italic text-center" : "bg-gray-800/50 p-2 rounded-lg";
@@ -281,11 +286,9 @@
             });
         }
 
-        // --- 렌더링 ---
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // 지형지물
             ctx.fillStyle = "#334155";
             ctx.strokeStyle = "#475569";
             ctx.lineWidth = 3;
@@ -294,19 +297,16 @@
                 ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
             });
 
-            // 플레이어들
             for (let id in players) {
                 const p = (id === user.uid) ? myPos : players[id];
                 const isTagger = gameState.taggerId === id;
                 const isMe = id === user.uid;
 
-                // 그림자 효과
                 ctx.beginPath();
                 ctx.ellipse(p.x, p.y + 10, 15, 8, 0, 0, Math.PI * 2);
                 ctx.fillStyle = "rgba(0,0,0,0.3)";
                 ctx.fill();
 
-                // 캐릭터 본체
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, PLAYER_RADIUS, 0, Math.PI * 2);
                 ctx.fillStyle = isTagger ? "#ef4444" : (isMe ? "#3b82f6" : "#4ade80");
@@ -315,7 +315,6 @@
                 ctx.lineWidth = 3;
                 ctx.stroke();
 
-                // 술래 후광
                 if (isTagger) {
                     ctx.beginPath();
                     ctx.arc(p.x, p.y, PLAYER_RADIUS + 5, 0, Math.PI * 2);
@@ -339,7 +338,6 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // --- 컨트롤러 ---
         window.addEventListener('keydown', (e) => {
             const key = e.key.toLowerCase();
             if (keys.hasOwnProperty(key)) {
