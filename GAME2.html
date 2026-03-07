@@ -3,133 +3,150 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>좀비 데드라인: 총력전</title>
+  <title>좀비 데드라인: 철권 요새</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Pretendard:wght@400;700;900&display=swap');
     
     body { margin: 0; overflow: hidden; background-color: #020617; user-select: none; font-family: 'Pretendard', sans-serif; }
     canvas { display: block; width: 100vw; height: 100vh; }
-    .glass-panel { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.1); }
-    .btn-unit { transition: all 0.1s; position: relative; }
-    .btn-unit:active { transform: scale(0.9); }
+    .glass-panel { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.15); }
+    .btn-unit { transition: all 0.1s; position: relative; overflow: hidden; }
+    .btn-unit:active { transform: scale(0.95); background: #1e293b; }
     .font-title { font-family: 'Black Han Sans', sans-serif; }
     
     #minimap {
-      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-      width: 400px; height: 60px; background: rgba(0,0,0,0.7);
-      border: 2px solid #334155; border-radius: 8px; overflow: hidden; z-index: 20;
+      position: fixed; top: 15px; right: 20px; 
+      width: 450px; height: 80px; background: rgba(0,0,0,0.8);
+      border: 2px solid #475569; border-radius: 12px; overflow: hidden; z-index: 50;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
     }
-    .minimap-dot { position: absolute; width: 4px; height: 4px; border-radius: 50%; transform: translate(-50%, -50%); }
+    .minimap-dot { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); }
+    .minimap-zone { position: absolute; height: 100%; border-right: 1px dashed rgba(255,255,255,0.2); }
 
-    #zombieInfo {
-      position: fixed; top: 100px; left: 20px; width: 180px; z-index: 20;
+    #zombieIntel {
+      position: fixed; top: 20px; left: 20px; width: 260px; z-index: 50;
     }
-
-    @keyframes pulse-red { 0% { opacity: 0.5; } 100% { opacity: 1; } }
-    .danger-tag { animation: pulse-red 0.5s infinite alternate; }
+    .stat-row { display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding: 4px 0; }
   </style>
 </head>
 <body>
 
   <!-- 시작 화면 -->
-  <div id="startScreen" class="fixed inset-0 z-40 bg-slate-950 flex flex-col items-center justify-center">
+  <div id="startScreen" class="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center">
     <div class="text-center mb-12">
-      <h1 class="text-7xl font-title text-white mb-4 tracking-tighter uppercase">Total War</h1>
-      <p class="text-slate-500 text-lg font-bold tracking-widest uppercase">The Horde is Coming</p>
+      <h1 class="text-8xl font-title text-white mb-4 tracking-tighter uppercase italic">IRON FORTRESS</h1>
+      <p class="text-blue-500 text-lg font-bold tracking-[0.3em] uppercase">Tactical Defense Simulation</p>
     </div>
-    <button onclick="startGame()" class="bg-blue-600 text-white px-12 py-4 rounded-full font-black text-xl shadow-xl hover:bg-blue-500 transition-all">작전 개시</button>
+    <button onclick="startGame()" class="group relative px-16 py-5 bg-blue-700 rounded-full overflow-hidden shadow-[0_0_30px_rgba(37,99,235,0.4)]">
+      <div class="absolute inset-0 bg-blue-500 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+      <span class="relative text-white font-black text-2xl tracking-widest">요새 수호 시작</span>
+    </button>
   </div>
 
   <!-- 인게임 UI -->
   <div id="gameUI" class="hidden">
     <!-- 미니맵 -->
     <div id="minimap">
-      <div id="minimapContent" class="relative w-full h-full">
-        <!-- 구역 표시 (배경) -->
-        <div class="absolute h-full border-r border-white/10" style="left: 27%; width: 1px;"></div>
-        <div class="absolute h-full border-r border-white/10" style="left: 58%; width: 1px;"></div>
-        <div class="absolute h-full border-r border-white/10" style="left: 85%; width: 1px;"></div>
+      <div id="minimapContent" class="relative w-full h-full bg-slate-900/50">
+        <!-- 구역 표시 동적 생성 -->
       </div>
     </div>
 
-    <!-- 좀비 상태 정보 -->
-    <div id="zombieInfo" class="glass-panel p-3 rounded-xl text-white text-[11px]">
-      <p class="text-red-500 font-black mb-2 flex items-center gap-1">
-        <span class="danger-tag">●</span> LIVE ZOMBIE INTEL
-      </p>
-      <div class="space-y-1 text-slate-300">
-        <p>개체 수: <span id="zCount" class="text-white">0</span></p>
-        <p>평균 체력: <span id="zAvgHp" class="text-white">0</span></p>
-        <p>최고 공격력: <span id="zMaxDmg" class="text-white">0</span></p>
-        <p class="mt-2 text-[9px] text-slate-500">※ 감염 구역 진입 시 80% 강화</p>
+    <!-- 상세 좀비 인텔 -->
+    <div id="zombieIntel" class="glass-panel p-4 rounded-2xl text-white shadow-2xl border-l-4 border-red-600">
+      <div class="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
+        <h3 class="font-black text-xs tracking-tighter flex items-center gap-2">
+          <span class="w-2 h-2 bg-red-600 rounded-full animate-pulse"></span>
+          THREAT ANALYSIS
+        </h3>
+        <span id="zTotalCount" class="bg-red-900 text-red-200 px-2 py-0.5 rounded text-[10px] font-bold">0 units</span>
+      </div>
+      <div id="zombieStatsList" class="space-y-1">
+        <!-- 동적 생성 -->
+        대상을 분석 중...
       </div>
     </div>
 
-    <!-- 기본 자원 및 웨이브 -->
-    <div class="fixed top-0 left-0 w-full p-6 flex justify-between items-start z-10 pointer-events-none">
-      <div class="flex flex-col gap-4 pointer-events-auto">
-        <div class="glass-panel p-4 rounded-2xl flex items-center gap-6 shadow-xl">
-          <div class="text-center min-w-[80px]">
-            <p class="text-[10px] text-slate-400 font-black uppercase tracking-tighter">Resources</p>
-            <p id="budgetDisplay" class="text-3xl font-black text-emerald-400">$300</p>
-          </div>
-          <div class="w-px h-10 bg-slate-700"></div>
-          <div class="text-center min-w-[60px]">
-            <p class="text-[10px] text-slate-400 font-black uppercase tracking-tighter">Wave</p>
-            <p id="waveDisplay" class="text-3xl font-black text-white">1</p>
-          </div>
+    <!-- 상단 중앙 자원 표시 -->
+    <div class="fixed top-5 left-1/2 -translate-x-1/2 flex gap-4 z-40 pointer-events-none">
+        <div class="glass-panel px-8 py-3 rounded-2xl flex items-center gap-10 pointer-events-auto border-b-4 border-blue-500/50">
+            <div class="text-center">
+                <p class="text-[10px] text-slate-400 font-bold uppercase">Budget</p>
+                <p id="budgetDisplay" class="text-3xl font-black text-emerald-400 tabular-nums">$0</p>
+            </div>
+            <div class="w-px h-10 bg-slate-700"></div>
+            <div class="text-center">
+                <p class="text-[10px] text-slate-400 font-bold uppercase">Tactical Wave</p>
+                <p id="waveDisplay" class="text-3xl font-black text-white italic">1</p>
+            </div>
         </div>
-      </div>
+    </div>
 
-      <div id="respawnBox" class="hidden pointer-events-auto">
-        <div class="bg-red-900/90 px-8 py-3 rounded-full border border-red-500 shadow-2xl text-center">
-          <p class="text-[10px] font-black text-red-200 uppercase">Hero Fallen - Observation Mode</p>
-          <p id="respawnTimeDisplay" class="text-3xl font-black text-white">30s</p>
-          <p class="text-[10px] text-white/50">A / D 로 전장 정찰 가능</p>
+    <!-- 기지 내구도 패널 -->
+    <div class="fixed top-[130px] right-20 z-40 pointer-events-none">
+        <div class="glass-panel p-4 rounded-2xl border-r-4 border-blue-600 w-64 pointer-events-auto">
+            <div class="flex justify-between items-end mb-1">
+                <span class="text-[10px] text-blue-400 font-black uppercase">Fortress Integrity</span>
+                <span id="baseHpText" class="text-xs text-white font-bold">100%</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                <div id="baseHpBar" class="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] transition-all duration-300" style="width: 100%"></div>
+            </div>
         </div>
-      </div>
+    </div>
 
-      <div class="flex flex-col gap-3 pointer-events-auto">
-        <div class="glass-panel p-4 rounded-2xl shadow-xl">
-          <p class="text-[10px] text-blue-400 font-black mb-1 uppercase">HQ Integrity</p>
-          <div class="w-64 h-3 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
-            <div id="baseHpBar" class="h-full bg-blue-500 transition-all duration-300" style="width: 100%"></div>
-          </div>
+    <!-- 리스폰 알림 -->
+    <div id="respawnBox" class="fixed inset-0 flex items-center justify-center bg-red-950/20 hidden z-50 pointer-events-none">
+        <div class="bg-slate-900 p-8 rounded-3xl border-2 border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.3)] text-center pointer-events-auto">
+          <h2 class="text-4xl font-black text-white mb-2 italic">HERO DOWN</h2>
+          <p class="text-slate-400 mb-4 font-bold text-sm uppercase">Stabilizing Tactical Core...</p>
+          <div id="respawnTimeDisplay" class="text-6xl font-black text-red-500">20</div>
         </div>
-      </div>
     </div>
 
     <!-- 하단 유닛 생산 바 -->
-    <div class="fixed bottom-0 left-0 w-full p-6 flex justify-center items-end gap-6 z-10 pointer-events-none">
-      <div class="glass-panel p-2 rounded-3xl flex gap-3 border-t-2 border-slate-700 pointer-events-auto shadow-2xl">
-        <button onmousedown="game.startSummon('knight')" onmouseup="game.stopSummon()" class="btn-unit w-20 h-24 bg-slate-900 rounded-xl flex flex-col items-center justify-center border-b-4 border-red-500">
-          <span class="text-2xl">⚔️</span><span class="text-sm font-black text-red-400">$30</span>
-          <span class="absolute top-1 left-2 text-[9px] text-slate-500 font-bold">1</span>
+    <div class="fixed bottom-8 left-1/2 -translate-x-1/2 flex gap-4 z-40">
+      <div class="glass-panel p-3 rounded-[2.5rem] flex gap-4 shadow-2xl border-t-2 border-white/10">
+        <button onmousedown="game.startSummon('knight')" onmouseup="game.stopSummon()" class="btn-unit w-24 h-28 bg-slate-950/50 rounded-2xl flex flex-col items-center justify-center border-b-4 border-red-500">
+          <span class="text-3xl mb-1">⚔️</span>
+          <span class="text-xs font-black text-slate-400 uppercase">Warrior</span>
+          <span class="text-sm font-black text-red-400">$30</span>
+          <div class="absolute top-2 left-2 text-[10px] text-slate-600 font-black">1</div>
         </button>
-        <button onmousedown="game.startSummon('soldier')" onmouseup="game.stopSummon()" class="btn-unit w-20 h-24 bg-slate-900 rounded-xl flex flex-col items-center justify-center border-b-4 border-blue-500">
-          <span class="text-2xl">🔫</span><span class="text-sm font-black text-blue-400">$60</span>
-          <span class="absolute top-1 left-2 text-[9px] text-slate-500 font-bold">2</span>
+        <button onmousedown="game.startSummon('soldier')" onmouseup="game.stopSummon()" class="btn-unit w-24 h-28 bg-slate-950/50 rounded-2xl flex flex-col items-center justify-center border-b-4 border-blue-500">
+          <span class="text-3xl mb-1">🔫</span>
+          <span class="text-xs font-black text-slate-400 uppercase">Rifleman</span>
+          <span class="text-sm font-black text-blue-400">$60</span>
+          <div class="absolute top-2 left-2 text-[10px] text-slate-600 font-black">2</div>
         </button>
-        <button onmousedown="game.startSummon('sniper')" onmouseup="game.stopSummon()" class="btn-unit w-20 h-24 bg-slate-900 rounded-xl flex flex-col items-center justify-center border-b-4 border-yellow-500">
-          <span class="text-2xl">🔭</span><span class="text-sm font-black text-yellow-400">$120</span>
-          <span class="absolute top-1 left-2 text-[9px] text-slate-500 font-bold">3</span>
+        <button onmousedown="game.startSummon('sniper')" onmouseup="game.stopSummon()" class="btn-unit w-24 h-28 bg-slate-950/50 rounded-2xl flex flex-col items-center justify-center border-b-4 border-yellow-500">
+          <span class="text-3xl mb-1">🔭</span>
+          <span class="text-xs font-black text-slate-400 uppercase">Sniper</span>
+          <span class="text-sm font-black text-yellow-400">$120</span>
+          <div class="absolute top-2 left-2 text-[10px] text-slate-600 font-black">3</div>
         </button>
-        <button onmousedown="game.startSummon('bazooka')" onmouseup="game.stopSummon()" class="btn-unit w-20 h-24 bg-slate-900 rounded-xl flex flex-col items-center justify-center border-b-4 border-purple-500">
-          <span class="text-2xl">🚀</span><span class="text-sm font-black text-purple-400">$200</span>
-          <span class="absolute top-1 left-2 text-[9px] text-slate-500 font-bold">4</span>
+        <button onmousedown="game.startSummon('bazooka')" onmouseup="game.stopSummon()" class="btn-unit w-24 h-28 bg-slate-950/50 rounded-2xl flex flex-col items-center justify-center border-b-4 border-purple-500">
+          <span class="text-3xl mb-1">🚀</span>
+          <span class="text-xs font-black text-slate-400 uppercase">Heavy</span>
+          <span class="text-sm font-black text-purple-400">$200</span>
+          <div class="absolute top-2 left-2 text-[10px] text-slate-600 font-black">4</div>
         </button>
-        <button onmousedown="game.startSummon('tank')" onmouseup="game.stopSummon()" class="btn-unit w-20 h-24 bg-slate-900 rounded-xl flex flex-col items-center justify-center border-b-4 border-green-500">
-          <span class="text-2xl">🚜</span><span class="text-sm font-black text-green-400">$500</span>
-          <span class="absolute top-1 left-2 text-[9px] text-slate-500 font-bold">5</span>
+        <button onmousedown="game.startSummon('tank')" onmouseup="game.stopSummon()" class="btn-unit w-24 h-28 bg-slate-950/50 rounded-2xl flex flex-col items-center justify-center border-b-4 border-green-500">
+          <span class="text-3xl mb-1">🚜</span>
+          <span class="text-xs font-black text-slate-400 uppercase">Tank</span>
+          <span class="text-sm font-black text-green-400">$500</span>
+          <div class="absolute top-2 left-2 text-[10px] text-slate-600 font-black">5</div>
         </button>
       </div>
     </div>
   </div>
 
-  <div id="resultScreen" class="fixed inset-0 bg-black/95 z-50 hidden flex-col items-center justify-center">
-    <h2 class="text-8xl font-title text-red-600 mb-4">BASE DESTROYED</h2>
-    <button onclick="location.reload()" class="bg-white text-black px-12 py-4 rounded-full font-black hover:scale-110">RETRY</button>
+  <!-- 결과 화면 -->
+  <div id="resultScreen" class="fixed inset-0 bg-black/95 z-[200] hidden flex-col items-center justify-center">
+    <h2 class="text-9xl font-title text-red-600 mb-8 animate-pulse italic">DEFEAT</h2>
+    <p class="text-slate-400 text-xl mb-12 tracking-[0.5em]">THE FORTRESS HAS FALLEN</p>
+    <button onclick="location.reload()" class="bg-white text-black px-16 py-5 rounded-full font-black text-xl hover:bg-slate-200 transition-all">작전 재검토 (다시 시작)</button>
   </div>
 
   <canvas id="gameCanvas"></canvas>
@@ -146,44 +163,48 @@
 
     let cw, ch, GROUND_TOP, GROUND_BOTTOM;
     const WORLD_WIDTH = 5500; 
+    const INFESTED_BOUNDARY = 4300; // 감염 지대 시작점
 
     function resize() {
       cw = window.innerWidth; ch = window.innerHeight;
       canvas.width = cw; canvas.height = ch;
-      GROUND_TOP = ch * 0.35; GROUND_BOTTOM = ch * 0.92;
+      GROUND_TOP = ch * 0.38; GROUND_BOTTOM = ch * 0.94;
     }
     window.addEventListener('resize', resize);
     resize();
 
     class Game {
       constructor() {
-        this.budget = 300; 
+        this.budget = 400; 
         this.wave = 1;
         this.waveProgress = 0;
-        this.waveDuration = 45;
+        this.waveDuration = 60;
         
-        this.base = { x: 300, y: (GROUND_TOP+GROUND_BOTTOM)/2, hp: 15000, maxHp: 15000, radius: 250 };
-        this.hero = { x: 600, y: (GROUND_TOP+GROUND_BOTTOM)/2, hp: 1500, maxHp: 1500, speed: 500, radius: 25, isDead: false };
+        this.base = { x: 350, y: (GROUND_TOP+GROUND_BOTTOM)/2, hp: 20000, maxHp: 20000 };
+        this.hero = { x: 650, y: (GROUND_TOP+GROUND_BOTTOM)/2, hp: 1800, maxHp: 1800, speed: 550, radius: 25, isDead: false };
         this.units = []; this.zombies = []; this.bullets = [];
         this.cameraX = 0; this.keys = {}; this.lastTime = 0; this.spawnTimer = 0;
         this.isGameOver = false; 
         
-        this.respawnBaseTime = 20; this.deathCount = 0; this.respawnTimer = 0;
+        this.respawnBaseTime = 15; this.deathCount = 0; this.respawnTimer = 0;
         this.summonHoldType = null; this.summonTimer = 0;
-        this.summonFastInterval = 0.08; // 소환 속도 대폭 상향
+        this.summonFastInterval = 0.08; 
 
         this.zones = [
-          { name: 'Asphalt', start: 0, end: 1500, color: '#1e293b' },
-          { name: 'Warzone', start: 1500, end: 3200, color: '#334155' },
-          { name: 'Wasteland', start: 3200, end: 4700, color: '#451a03' },
-          { name: 'Infested', start: 4700, end: WORLD_WIDTH, color: '#2d064a' }
+          { name: 'City HQ', start: 0, end: 1200, color: 'rgba(15, 23, 42, 0.4)' },
+          { name: 'Outer Walls', start: 1200, end: 2800, color: 'rgba(30, 41, 59, 0.4)' },
+          { name: 'Dark Plains', start: 2800, end: 4300, color: 'rgba(49, 46, 129, 0.4)' },
+          { name: 'Infested Core', start: 4300, end: WORLD_WIDTH, color: 'rgba(76, 29, 149, 0.5)' }
         ];
 
-        window.addEventListener('keydown', e => { this.keys[e.code] = true; });
+        window.addEventListener('keydown', e => { 
+          this.keys[e.code] = true; 
+          const keyMap = { Digit1:'knight', Digit2:'soldier', Digit3:'sniper', Digit4:'bazooka', Digit5:'tank' };
+          if(keyMap[e.code]) this.startSummon(keyMap[e.code]);
+        });
         window.addEventListener('keyup', e => { 
           this.keys[e.code] = false; 
-          // 숫자키 떼었을 때 소환 중지
-          if(['Digit1','Digit2','Digit3','Digit4','Digit5'].includes(e.code)) this.summonHoldType = null;
+          if(['Digit1','Digit2','Digit3','Digit4','Digit5'].includes(e.code)) this.stopSummon();
         });
       }
 
@@ -192,20 +213,18 @@
 
       summonUnit(type) {
         const specs = {
-          knight: { cost: 30, color: COLORS.KNIGHT, hp: 550, dmg: 55, range: 80, cd: 0.5, speed: 220, radius: 18, weapon: 'sword' },
-          soldier: { cost: 60, color: COLORS.SOLDIER, hp: 320, dmg: 65, range: 420, cd: 0.45, speed: 190, radius: 18, weapon: 'gun' },
-          sniper: { cost: 120, color: COLORS.SNIPER, hp: 250, dmg: 160, range: 950, cd: 2.8, speed: 160, radius: 18, weapon: 'sniper' },
-          bazooka: { cost: 200, color: COLORS.BAZOOKA, hp: 380, dmg: 110, range: 550, cd: 3.2, speed: 150, radius: 20, area: 160, weapon: 'launcher' },
-          tank: { cost: 500, color: COLORS.TANK, hp: 2800, dmg: 120, range: 750, cd: 4.2, speed: 120, radius: 45, area: 260, weapon: 'cannon', isTank: true }
+          knight: { cost: 30, color: COLORS.KNIGHT, hp: 600, dmg: 65, range: 90, cd: 0.5, speed: 250, radius: 18, weapon: 'sword' },
+          soldier: { cost: 60, color: COLORS.SOLDIER, hp: 350, dmg: 75, range: 450, cd: 0.4, speed: 200, radius: 18, weapon: 'gun' },
+          sniper: { cost: 120, color: COLORS.SNIPER, hp: 280, dmg: 200, range: 1000, cd: 2.2, speed: 170, radius: 18, weapon: 'sniper' },
+          bazooka: { cost: 200, color: COLORS.BAZOOKA, hp: 420, dmg: 140, range: 600, cd: 2.8, speed: 150, radius: 22, area: 180, weapon: 'launcher' },
+          tank: { cost: 500, color: COLORS.TANK, hp: 4000, dmg: 160, range: 850, cd: 3.8, speed: 130, radius: 50, area: 350, weapon: 'cannon', isTank: true }
         };
         const s = specs[type];
         if (this.budget >= s.cost) {
           this.budget -= s.cost;
-          // 배치 시 겹치지 않게 무작위성 강화
           this.units.push({
-            ...s, type, x: 500 + Math.random()*250, y: GROUND_TOP + Math.random()*(GROUND_BOTTOM-GROUND_TOP), 
-            curHp: s.hp, timer: 0, attackAnim: 0, 
-            patrolTarget: { x: 2000 + Math.random()*1500, y: GROUND_TOP + Math.random()*(GROUND_BOTTOM-GROUND_TOP) }
+            ...s, type, x: 550 + Math.random()*200, y: GROUND_TOP + Math.random()*(GROUND_BOTTOM-GROUND_TOP), 
+            curHp: s.hp, timer: 0, attackAnim: 0
           });
           return true;
         }
@@ -215,20 +234,20 @@
       spawnZombie() {
         const w = Math.floor(this.wave);
         const types = [
-          { hp: 100 + (w*20), dmg: 12 + (w*2), speed: 80, color: COLORS.Z_NORM, reward: 15, radius: 20, minWave: 1 },
-          { hp: 70 + (w*12), dmg: 15 + (w*2), speed: 90, color: COLORS.Z_SPIT, reward: 25, radius: 22, range: 480, minWave: 3 },
-          { hp: 450 + (w*80), dmg: 25 + (w*3), speed: 55, color: COLORS.Z_TANK, reward: 80, radius: 35, area: 90, minWave: 5 },
-          { hp: 90 + (w*15), dmg: 35 + (w*4), speed: 320, color: COLORS.Z_FAST, reward: 35, radius: 16, minWave: 7 },
-          { hp: 2500 + (w*400), dmg: 100 + (w*20), speed: 45, color: COLORS.Z_BOSS, reward: 600, radius: 70, minWave: 10 }
+          { name: 'Common', hp: 120 + (w*30), dmg: 15 + (w*3), speed: 85, color: COLORS.Z_NORM, reward: 15, radius: 20, minWave: 1 },
+          { name: 'Spitter', hp: 90 + (w*20), dmg: 20 + (w*4), speed: 95, color: COLORS.Z_SPIT, reward: 25, radius: 22, range: 500, minWave: 3 },
+          { name: 'Brute', hp: 600 + (w*120), dmg: 35 + (w*5), speed: 55, color: COLORS.Z_TANK, reward: 90, radius: 38, area: 100, minWave: 5 },
+          { name: 'Runner', hp: 110 + (w*25), dmg: 45 + (w*6), speed: 360, color: COLORS.Z_FAST, reward: 40, radius: 16, minWave: 7 },
+          { name: 'Warlord', hp: 3500 + (w*600), dmg: 150 + (w*30), speed: 45, color: COLORS.Z_BOSS, reward: 800, radius: 80, minWave: 10 }
         ];
         
         const available = types.filter(t => w >= t.minWave);
-        const count = 3 + Math.floor(this.wave * 1.2);
+        const spawnCount = 2 + Math.floor(this.wave * 1.6);
         
-        for(let i=0; i<count; i++) {
+        for(let i=0; i<spawnCount; i++) {
           const zT = available[Math.floor(Math.random() * available.length)];
           this.zombies.push({
-            ...zT, x: WORLD_WIDTH + 100 + Math.random() * 500,
+            ...zT, x: WORLD_WIDTH + 100 + Math.random() * 800,
             y: GROUND_TOP + Math.random()*(GROUND_BOTTOM-GROUND_TOP),
             curHp: zT.hp, maxHp: zT.hp, timer: 0
           });
@@ -238,13 +257,6 @@
       update(dt) {
         if (this.isGameOver) return;
         
-        // 유닛 소환 단축키 처리 (Hold 시 가속)
-        if (this.keys['Digit1']) this.summonHoldType = 'knight';
-        else if (this.keys['Digit2']) this.summonHoldType = 'soldier';
-        else if (this.keys['Digit3']) this.summonHoldType = 'sniper';
-        else if (this.keys['Digit4']) this.summonHoldType = 'bazooka';
-        else if (this.keys['Digit5']) this.summonHoldType = 'tank';
-
         if (this.summonHoldType) {
           this.summonTimer += dt;
           if (this.summonTimer >= this.summonFastInterval) {
@@ -253,21 +265,21 @@
           }
         }
 
-        this.budget += dt * (35 + this.wave * 6);
+        this.budget += dt * (45 + this.wave * 10);
         this.waveProgress += dt;
         if (this.waveProgress >= this.waveDuration) {
           this.wave += 1; this.waveProgress = 0;
+          this.budget += 600; 
         }
 
-        // 카메라 및 영웅 관리
+        // 카메라 제어
         if (this.hero.isDead) {
-          // 사망 시 관전자 모드 (A/D로 이동)
-          if (this.keys['KeyA']) this.cameraX -= 1200 * dt;
-          if (this.keys['KeyD']) this.cameraX += 1200 * dt;
+          if (this.keys['KeyA']) this.cameraX -= 1800 * dt;
+          if (this.keys['KeyD']) this.cameraX += 1800 * dt;
           this.respawnTimer -= dt;
           if (this.respawnTimer <= 0) {
             this.hero.isDead = false; this.hero.hp = this.hero.maxHp;
-            this.hero.x = 600; this.hero.y = (GROUND_TOP+GROUND_BOTTOM)/2;
+            this.hero.x = 650; this.hero.y = (GROUND_TOP+GROUND_BOTTOM)/2;
           }
         } else {
           if (this.keys['KeyA']) this.hero.x -= this.hero.speed * dt;
@@ -275,73 +287,84 @@
           if (this.keys['KeyW']) this.hero.y -= this.hero.speed * dt;
           if (this.keys['KeyS']) this.hero.y += this.hero.speed * dt;
           this.hero.x = Math.max(20, Math.min(this.hero.x, WORLD_WIDTH - 20));
-          this.hero.y = Math.max(GROUND_TOP + 10, Math.min(this.hero.y, GROUND_BOTTOM - 10));
+          this.hero.y = Math.max(GROUND_TOP + 20, Math.min(this.hero.y, GROUND_BOTTOM - 20));
 
-          if (this.hero.x > 4700) this.hero.hp -= 50 * dt;
+          if (this.hero.x > INFESTED_BOUNDARY) this.hero.hp -= 50 * dt; // 도트 데미지
           if (this.hero.hp <= 0) {
             this.hero.isDead = true; this.deathCount++;
-            this.respawnTimer = this.respawnBaseTime + (this.deathCount * 5);
+            this.respawnTimer = this.respawnBaseTime + (this.deathCount * 3);
           }
-          // 생존 시 영웅 추적 카메라
           this.cameraX += (this.hero.x - cw/2 - this.cameraX) * 0.15;
         }
         this.cameraX = Math.max(0, Math.min(this.cameraX, WORLD_WIDTH - cw));
 
-        // 유닛 AI
+        // 유닛 AI (지능적 전진 및 후퇴)
         this.units.forEach(u => {
           if (u.timer > 0) u.timer -= dt;
           if (u.attackAnim > 0) u.attackAnim -= dt * 6;
-          if (u.x > 4700) u.curHp -= 40 * dt;
+          
+          // 감염 지대 데미지 적용
+          if (u.x > INFESTED_BOUNDARY) u.curHp -= 40 * dt;
 
-          const target = this.zombies.find(z => Math.sqrt((z.x-u.x)**2 + (z.y-u.y)**2) < u.range + 50);
+          const detectionRange = u.range + 150;
+          const target = this.zombies.find(z => Math.sqrt((z.x-u.x)**2 + (z.y-u.y)**2) < detectionRange);
+          
           if (target) {
             const dist = Math.sqrt((target.x-u.x)**2 + (target.y-u.y)**2);
             if (dist < u.range) {
               if (u.timer <= 0) {
                 u.attackAnim = 1.0;
                 if (u.weapon === 'sword') target.curHp -= u.dmg;
-                else this.bullets.push({ x: u.x, y: u.y-40, tx: target.x, ty: target.y-30, speed: 2200, dmg: u.dmg, isAlly: true, color: u.color, area: u.area });
+                else this.bullets.push({ x: u.x, y: u.y-40, tx: target.x, ty: target.y-30, speed: 2500, dmg: u.dmg, isAlly: true, color: u.color, area: u.area });
                 u.timer = u.cd;
               }
             } else {
+              // 타겟을 향해 이동 (감염 지대 안이라도 교전 중이면 진입)
               const angle = Math.atan2(target.y - u.y, target.x - u.x);
               u.x += Math.cos(angle) * u.speed * dt; u.y += Math.sin(angle) * u.speed * dt;
             }
           } else {
-            // 적이 없을 때 전진
-            u.x += u.speed * 0.6 * dt;
-            if (u.x > 4650) u.x = 4650; // 감염 구역 앞 대기
+            // 적이 없을 때 행동
+            if (u.x < INFESTED_BOUNDARY - 50) {
+              // 감염 지대 전까지는 자유롭게 전진
+              u.x += u.speed * 0.7 * dt;
+            } else if (u.x > INFESTED_BOUNDARY) {
+              // 감염 지대 안에 들어와 있다면 안전 구역으로 후퇴
+              u.x -= u.speed * 0.8 * dt;
+            }
+            // 경계선 근처에서 머무름 (무모하게 들어가지 않음)
           }
           u.y = Math.max(GROUND_TOP, Math.min(u.y, GROUND_BOTTOM));
         });
 
-        // 좀비 AI
+        // 좀비 AI (기지 공격)
         this.zombies.forEach(z => {
           if (z.timer > 0) z.timer -= dt;
-          const powerMult = z.x > 4700 ? 1.8 : 1.0;
-          const speedMult = z.x > 4700 ? 1.4 : 1.0;
+          const powerMult = z.x > INFESTED_BOUNDARY ? 1.6 : 1.0;
+          const speedMult = z.x > INFESTED_BOUNDARY ? 1.3 : 1.0;
 
           let target = null;
-          let minDist = 2000;
+          let minDist = 3000;
           const enemies = [...this.units]; if (!this.hero.isDead) enemies.push(this.hero);
+          
           enemies.forEach(p => {
             const d = Math.sqrt((p.x-z.x)**2 + (p.y-z.y)**2);
-            if (d < 800 && d < minDist) { minDist = d; target = p; }
+            if (d < 950 && d < minDist) { minDist = d; target = p; }
           });
-          if (Math.sqrt((this.base.x-z.x)**2 + (this.base.y-z.y)**2) < 600) target = this.base;
+          if (Math.sqrt((this.base.x-z.x)**2 + (this.base.y-z.y)**2) < 800) target = this.base;
 
           if (target) {
             const dist = Math.sqrt((target.x-z.x)**2 + (target.y-z.y)**2);
-            const range = target === this.base ? 350 : (z.range || 85);
+            const range = (target === this.base) ? 400 : (z.range || 90);
             if (dist < range) {
               if (z.timer <= 0) {
-                if (z.range > 150) this.bullets.push({ x: z.x, y: z.y-40, tx: target.x, ty: target.y-20, speed: 900, dmg: z.dmg*powerMult, isAlly: false, color: z.color });
+                if (z.range > 150) this.bullets.push({ x: z.x, y: z.y-40, tx: target.x, ty: target.y-20, speed: 1000, dmg: z.dmg*powerMult, isAlly: false, color: z.color });
                 else {
                   if (target === this.base) this.base.hp -= z.dmg*powerMult;
                   else if (target === this.hero) this.hero.hp -= z.dmg*powerMult;
                   else target.curHp -= z.dmg*powerMult;
                 }
-                z.timer = 1.3;
+                z.timer = 1.1;
               }
             } else {
               const angle = Math.atan2(target.y - z.y, target.x - z.x);
@@ -349,22 +372,22 @@
               z.y += Math.sin(angle) * (z.speed * speedMult) * dt;
             }
           } else {
-            z.x -= z.speed * speedMult * dt; // 기지 방향 전진
+            z.x -= z.speed * speedMult * dt; 
           }
         });
 
-        // 투사체
+        // 투사체 처리
         this.bullets.forEach(b => {
           const dx = b.tx-b.x, dy = b.ty-b.y; const dist = Math.sqrt(dx*dx+dy*dy);
           b.x += (dx/dist) * b.speed * dt; b.y += (dy/dist) * b.speed * dt;
-          if (dist < 40) {
+          if (dist < 50) {
             b.dead = true;
             if (b.isAlly) {
               if (b.area) this.zombies.forEach(z => { if (Math.sqrt((z.x-b.x)**2+(z.y-b.y)**2) < b.area) z.curHp -= b.dmg; });
-              else { const h = this.zombies.find(z => Math.sqrt((z.x-b.x)**2+(z.y-b.y)**2) < 80); if (h) h.curHp -= b.dmg; }
+              else { const h = this.zombies.find(z => Math.sqrt((z.x-b.x)**2+(z.y-b.y)**2) < 100); if (h) h.curHp -= b.dmg; }
             } else {
-              if (!this.hero.isDead && Math.sqrt((this.hero.x-b.x)**2+(this.hero.y-b.y)**2) < 60) this.hero.hp -= b.dmg;
-              this.units.forEach(u => { if (Math.sqrt((u.x-b.x)**2+(u.y-b.y)**2) < 60) u.curHp -= b.dmg; });
+              if (!this.hero.isDead && Math.sqrt((this.hero.x-b.x)**2+(this.hero.y-b.y)**2) < 70) this.hero.hp -= b.dmg;
+              this.units.forEach(u => { if (Math.sqrt((u.x-b.x)**2+(u.y-b.y)**2) < 70) u.curHp -= b.dmg; });
             }
           }
         });
@@ -374,7 +397,7 @@
         this.bullets = this.bullets.filter(b => !b.dead);
 
         this.spawnTimer += dt;
-        if (this.spawnTimer > Math.max(0.4, 2.8 - (this.wave * 0.2))) {
+        if (this.spawnTimer > Math.max(0.2, 3.2 - (this.wave * 0.28))) {
           this.spawnZombie(); this.spawnTimer = 0;
         }
 
@@ -384,118 +407,187 @@
 
       updateUI() {
         document.getElementById('budgetDisplay').innerText = `$${Math.floor(this.budget)}`;
-        document.getElementById('waveDisplay').innerText = Math.floor(this.wave);
-        document.getElementById('baseHpBar').style.width = `${(this.base.hp/this.base.maxHp)*100}%`;
+        document.getElementById('waveDisplay').innerText = this.wave;
+        const hpPercent = Math.max(0, (this.base.hp/this.base.maxHp)*100);
+        document.getElementById('baseHpBar').style.width = `${hpPercent}%`;
+        document.getElementById('baseHpText').innerText = `${Math.ceil(hpPercent)}%`;
         
         if (this.hero.isDead) {
           document.getElementById('respawnBox').classList.remove('hidden');
-          document.getElementById('respawnTimeDisplay').innerText = `${Math.ceil(this.respawnTimer)}s`;
+          document.getElementById('respawnTimeDisplay').innerText = Math.ceil(this.respawnTimer);
         } else {
           document.getElementById('respawnBox').classList.add('hidden');
         }
 
-        // 좀비 인텔 업데이트
-        document.getElementById('zCount').innerText = this.zombies.length;
-        if (this.zombies.length > 0) {
-          const avgHp = this.zombies.reduce((a,b)=>a+b.curHp,0)/this.zombies.length;
-          const maxDmg = Math.max(...this.zombies.map(z=>z.dmg));
-          document.getElementById('zAvgHp').innerText = Math.floor(avgHp);
-          document.getElementById('zMaxDmg').innerText = Math.floor(maxDmg);
-        }
+        // 좀비 인텔 UI 업데이트
+        const zCount = this.zombies.length;
+        document.getElementById('zTotalCount').innerText = `${zCount} units`;
+        
+        const types = {};
+        this.zombies.forEach(z => {
+            if (!types[z.name]) types[z.name] = { count: 0, hp: z.hp, dmg: z.dmg, color: z.color };
+            types[z.name].count++;
+        });
+
+        let intelHtml = '';
+        Object.keys(types).forEach(name => {
+            const t = types[name];
+            intelHtml += `
+                <div class="stat-row">
+                    <span class="font-bold flex items-center gap-1" style="color: ${t.color}">
+                        ${name} <span class="text-[9px] opacity-70">x${t.count}</span>
+                    </span>
+                    <span class="text-[10px] text-slate-400">HP ${Math.floor(t.hp)} | ATK ${Math.floor(t.dmg)}</span>
+                </div>
+            `;
+        });
+        document.getElementById('zombieStatsList').innerHTML = intelHtml || '<p class="text-[10px] text-slate-500">클리어 상태</p>';
 
         // 미니맵 업데이트
-        this.updateMinimap();
-      }
-
-      updateMinimap() {
         minimapContent.innerHTML = '';
-        const scale = 400 / WORLD_WIDTH;
-        
-        // 기지
-        this.addMinimapDot(this.base.x * scale, 'blue', 8);
-        // 영웅
-        if(!this.hero.isDead) this.addMinimapDot(this.hero.x * scale, 'white', 6);
-        // 아군
-        this.units.forEach(u => this.addMinimapDot(u.x * scale, '#60a5fa', 3));
-        // 좀비
-        this.zombies.forEach(z => this.addMinimapDot(z.x * scale, '#ef4444', 3));
-        // 카메라 영역
-        const camDiv = document.createElement('div');
-        camDiv.className = 'absolute top-0 h-full border border-white/40 bg-white/5';
-        camDiv.style.left = (this.cameraX * scale) + 'px';
-        camDiv.style.width = (cw * scale) + 'px';
-        minimapContent.appendChild(camDiv);
-      }
+        this.zones.forEach(z => {
+          const div = document.createElement('div');
+          div.className = 'minimap-zone';
+          div.style.left = (z.start / WORLD_WIDTH * 100) + '%';
+          div.style.width = ((z.end - z.start) / WORLD_WIDTH * 100) + '%';
+          div.style.backgroundColor = z.color;
+          minimapContent.appendChild(div);
+        });
 
-      addMinimapDot(left, color, size) {
-        const dot = document.createElement('div');
-        dot.className = 'minimap-dot';
-        dot.style.left = left + 'px';
-        dot.style.top = '50%';
-        dot.style.backgroundColor = color;
-        dot.style.width = size + 'px';
-        dot.style.height = size + 'px';
-        minimapContent.appendChild(dot);
+        const drawDot = (x, color, size=4) => {
+          const dot = document.createElement('div');
+          dot.className = 'minimap-dot';
+          dot.style.left = (x / WORLD_WIDTH * 100) + '%';
+          dot.style.top = '50%';
+          dot.style.width = size + 'px'; dot.style.height = size + 'px';
+          dot.style.backgroundColor = color;
+          dot.style.boxShadow = `0 0 5px ${color}`;
+          minimapContent.appendChild(dot);
+        };
+
+        this.units.forEach(u => drawDot(u.x, u.color));
+        this.zombies.forEach(z => drawDot(z.x, z.color));
+        if(!this.hero.isDead) drawDot(this.hero.x, COLORS.HERO, 8);
+        drawDot(this.base.x, '#3b82f6', 10);
       }
 
       draw() {
-        ctx.clearRect(0, 0, cw, ch);
-        ctx.save(); ctx.translate(-this.cameraX, 0);
+        ctx.clearRect(0,0,cw,ch);
+        
+        // 배경 그라데이션
+        const bgGrad = ctx.createLinearGradient(0,0,0,ch);
+        bgGrad.addColorStop(0, '#020617'); bgGrad.addColorStop(0.5, '#0f172a'); bgGrad.addColorStop(1, '#020617');
+        ctx.fillStyle = bgGrad; ctx.fillRect(0,0,cw,ch);
 
-        // 배경
+        // 월드 렌더링 시작
+        ctx.save();
+        ctx.translate(-this.cameraX, 0);
+
+        // 구역 배경
         this.zones.forEach(z => {
           ctx.fillStyle = z.color;
-          ctx.fillRect(z.start, GROUND_TOP, z.end - z.start, GROUND_BOTTOM - GROUND_TOP);
+          ctx.fillRect(z.start, GROUND_TOP, z.end-z.start, GROUND_BOTTOM-GROUND_TOP);
         });
 
-        // 기지
-        ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.ellipse(this.base.x, this.base.y, 300, 200, 0, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 4; ctx.stroke();
+        // 감염 지대 시각 효과
+        ctx.fillStyle = 'rgba(124, 58, 237, 0.1)';
+        ctx.fillRect(INFESTED_BOUNDARY, GROUND_TOP, WORLD_WIDTH-INFESTED_BOUNDARY, GROUND_BOTTOM-GROUND_TOP);
+        
+        // 경계선
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)'; ctx.setLineDash([10, 10]); ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(INFESTED_BOUNDARY, GROUND_TOP); ctx.lineTo(INFESTED_BOUNDARY, GROUND_BOTTOM); ctx.stroke();
+        ctx.setLineDash([]);
 
-        const entities = [...this.units, ...this.zombies];
-        if (!this.hero.isDead) entities.push(this.hero);
-        entities.sort((a,b)=>a.y-b.y);
+        // 땅 데코
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
+        for(let i=0; i<WORLD_WIDTH; i+=200) {
+          ctx.beginPath(); ctx.moveTo(i, GROUND_TOP); ctx.lineTo(i, GROUND_BOTTOM); ctx.stroke();
+        }
 
-        entities.forEach(e => {
-          ctx.save(); ctx.translate(e.x, e.y);
-          if (e === this.hero) {
-            ctx.fillStyle = COLORS.HERO; ctx.fillRect(-18, -65, 36, 65);
-            ctx.fillStyle = '#cbd5e1'; ctx.beginPath(); ctx.arc(0, -82, 14, 0, Math.PI*2); ctx.fill();
-          } else if (e.weapon) {
-            ctx.fillStyle = e.color; 
-            if (e.isTank) { ctx.fillRect(-75, -60, 150, 60); }
-            else { ctx.fillRect(-15, -50, 30, 50); ctx.fillStyle = '#f1f5f9'; ctx.beginPath(); ctx.arc(0, -62, 12, 0, Math.PI*2); ctx.fill(); }
-            // HP Bar
-            ctx.fillStyle = '#000'; ctx.fillRect(-25, -95, 50, 6);
-            ctx.fillStyle = e.color; ctx.fillRect(-25, -95, (e.curHp/e.hp)*50, 6);
+        // 요새(Fortress) 렌더링 - 대폭 강화
+        const bx = this.base.x, by = this.base.y;
+        // 메인 바디
+        ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.roundRect(bx-250, by-180, 400, 360, 20); ctx.fill();
+        ctx.strokeStyle = '#334155'; ctx.lineWidth = 8; ctx.stroke();
+        // 포탑 성벽
+        ctx.fillStyle = '#0f172a';
+        for(let i=0; i<5; i++) ctx.fillRect(bx-270, by-180 + i*75, 50, 40);
+        // 중앙 코어
+        ctx.fillStyle = this.base.hp > 5000 ? '#3b82f6' : '#ef4444';
+        ctx.shadowBlur = 30; ctx.shadowColor = ctx.fillStyle;
+        ctx.beginPath(); ctx.arc(bx-50, by, 60, 0, Math.PI*2); ctx.fill();
+        ctx.shadowBlur = 0;
+        // 거대 안테나
+        ctx.strokeStyle = '#475569'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(bx-150, by-180); ctx.lineTo(bx-150, by-280); ctx.stroke();
+        ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(bx-150, by-280, 5, 0, Math.PI*2); ctx.fill();
+
+        // 유닛들
+        [...this.units, this.hero, ...this.zombies].sort((a,b)=>a.y-b.y).forEach(obj => {
+          if (obj.isDead) return;
+          const isHero = obj === this.hero;
+          const isZombie = this.zombies.includes(obj);
+          
+          ctx.save();
+          ctx.translate(obj.x, obj.y);
+          
+          // 그림자
+          ctx.fillStyle = 'rgba(0,0,0,0.4)';
+          ctx.beginPath(); ctx.ellipse(0, 0, obj.radius, obj.radius/2, 0, 0, Math.PI*2); ctx.fill();
+
+          // 몸체
+          ctx.fillStyle = obj.color;
+          ctx.shadowBlur = isHero ? 20 : 0; ctx.shadowColor = obj.color;
+          
+          if (obj.isTank) {
+            ctx.fillRect(-obj.radius, -80, obj.radius*2, 70);
+            ctx.fillStyle = '#111'; ctx.fillRect(-obj.radius-10, -20, obj.radius*2+20, 25);
           } else {
-            ctx.fillStyle = e.color; ctx.fillRect(-15, -50, 30, 50);
-            ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.arc(0, -62, 12, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#000'; ctx.fillRect(-30, -90, 60, 7);
-            ctx.fillStyle = '#ef4444'; ctx.fillRect(-30, -90, (e.curHp/e.maxHp)*60, 7);
+            ctx.beginPath();
+            ctx.arc(0, -40, obj.radius, 0, Math.PI*2); ctx.fill();
+            // 머리
+            ctx.fillStyle = '#334155'; ctx.beginPath(); ctx.arc(0, -75, obj.radius*0.7, 0, Math.PI*2); ctx.fill();
           }
+
+          // 공격 애니메이션
+          if (obj.attackAnim > 0) {
+            ctx.strokeStyle = 'white'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(0, -40, obj.radius + (1-obj.attackAnim)*50, 0, Math.PI*2); ctx.stroke();
+          }
+
+          // 체력바
+          const hpRatio = obj.curHp ? (obj.curHp/obj.hp) : (obj.hp/obj.maxHp);
+          ctx.fillStyle = '#ef4444'; ctx.fillRect(-30, -110, 60, 6);
+          ctx.fillStyle = '#22c55e'; ctx.fillRect(-30, -110, 60 * hpRatio, 6);
+          
           ctx.restore();
         });
 
+        // 투사체
         this.bullets.forEach(b => {
-          ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x, b.y, b.area?18:8, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = b.color; ctx.shadowBlur = 10; ctx.shadowColor = b.color;
+          ctx.beginPath(); ctx.arc(b.x, b.y, b.area ? 8 : 4, 0, Math.PI*2); ctx.fill();
+          ctx.shadowBlur = 0;
         });
 
         ctx.restore();
       }
+
+      loop(time) {
+        const dt = Math.min((time - this.lastTime) / 1000, 0.1);
+        this.lastTime = time;
+        this.update(dt);
+        this.draw();
+        requestAnimationFrame(t => this.loop(t));
+      }
     }
 
-    const game = new Game();
+    let game;
     function startGame() {
-      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('startScreen').classList.add('hidden');
       document.getElementById('gameUI').classList.remove('hidden');
-      requestAnimationFrame(tick);
-    }
-    function tick(t) {
-      const dt = Math.min(0.1, (t - game.lastTime)/1000);
-      game.lastTime = t;
-      game.update(dt); game.draw();
-      requestAnimationFrame(tick);
+      game = new Game();
+      requestAnimationFrame(t => game.loop(t));
     }
   </script>
 </body>
