@@ -15,6 +15,7 @@
     }
     canvas {
       display: block;
+      /* CSS 크기는 100%로 고정하고 내부 해상도는 JS로 조절합니다. */
       width: 100vw;
       height: 100vh;
     }
@@ -192,9 +193,26 @@
     const ctx = canvas.getContext('2d');
     let gameStarted = false;
 
+    // 게임 내부 크기를 저장할 변수 (논리적 크기)
+    let cw = window.innerWidth;
+    let ch = window.innerHeight;
+
+    // 모니터 해상도(DPI)에 맞춰 캔버스가 흐릿해지지 않게 처리하는 함수
     function resize() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      cw = window.innerWidth;
+      ch = window.innerHeight;
+      const dpr = window.devicePixelRatio || 1;
+      
+      // 실제 픽셀 크기
+      canvas.width = cw * dpr;
+      canvas.height = ch * dpr;
+      
+      // CSS 크기
+      canvas.style.width = cw + 'px';
+      canvas.style.height = ch + 'px';
+      
+      // 스케일 보정
+      ctx.scale(dpr, dpr);
     }
     window.addEventListener('resize', resize);
     resize();
@@ -230,8 +248,11 @@
         this.selectionBox = null;
         this.selectedUnits = [];
         this.buildMode = null;
-        this.hq = new Building(canvas.width / 2, canvas.height / 2, 'hq');
+        
+        // 정중앙에 사령부 배치
+        this.hq = new Building(cw / 2, ch / 2, 'hq');
         this.buildings.push(this.hq);
+        
         this.enemySpawnTimer = 0;
         this.enemySpawnInterval = 5000;
         this.initInputHandlers();
@@ -267,7 +288,7 @@
       setBuildMode(type) {
         let cost = type === 'refinery' ? 100 : 150;
         if (this.resources.gold >= cost) this.buildMode = type;
-        else this.addFloatingText("군자금 부족!", canvas.width/2, canvas.height/2, '#ef4444');
+        else this.addFloatingText("군자금 부족!", cw/2, ch/2, '#ef4444');
       }
 
       placeBuilding(x, y) {
@@ -288,7 +309,7 @@
         let costMana = type === 'knight' ? 0 : 50;
         let barracksList = this.buildings.filter(b => b.type === 'barracks');
         if (barracksList.length === 0) {
-          this.addFloatingText("병영이 필요합니다!", canvas.width/2, canvas.height/2, '#ef4444');
+          this.addFloatingText("병영이 필요합니다!", cw/2, ch/2, '#ef4444');
           return;
         }
         if (this.resources.gold >= costGold && this.resources.mana >= costMana) {
@@ -297,7 +318,7 @@
           let b = barracksList[Math.floor(Math.random() * barracksList.length)];
           this.units.push(new Unit(b.x, b.y + 60, type));
           this.updateUI();
-        } else this.addFloatingText("자원 부족!", canvas.width/2, canvas.height/2, '#ef4444');
+        } else this.addFloatingText("자원 부족!", cw/2, ch/2, '#ef4444');
       }
 
       executeSelection() {
@@ -365,10 +386,10 @@
 
       spawnEnemy() {
         let side = Math.floor(Math.random() * 4), ex, ey, m = 50;
-        if(side === 0) { ex = Math.random()*canvas.width; ey = -m; }
-        else if(side === 1) { ex = canvas.width+m; ey = Math.random()*canvas.height; }
-        else if(side === 2) { ex = Math.random()*canvas.width; ey = canvas.height+m; }
-        else { ex = -m; ey = Math.random()*canvas.height; }
+        if(side === 0) { ex = Math.random()*cw; ey = -m; }
+        else if(side === 1) { ex = cw+m; ey = Math.random()*ch; }
+        else if(side === 2) { ex = Math.random()*cw; ey = ch+m; }
+        else { ex = -m; ey = Math.random()*ch; }
         let diff = 1 + (this.timeElapsed / 60), r = Math.random();
         let type = r > 0.9 ? 'golem' : (r > 0.6 ? 'drone' : 'merc');
         this.enemies.push(new Enemy(ex, ey, type, diff));
@@ -394,10 +415,11 @@
       }
 
       draw() {
-        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, cw, ch);
         ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
-        for (let i=0; i<canvas.width; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
-        for (let i=0; i<canvas.height; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
+        for (let i=0; i<cw; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,ch); ctx.stroke(); }
+        for (let i=0; i<ch; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(cw,i); ctx.stroke(); }
+        
         this.buildings.forEach(b => b.draw(ctx));
         if (this.buildMode) {
           ctx.globalAlpha = 0.5;
@@ -409,6 +431,7 @@
         this.projectiles.forEach(p => p.draw(ctx));
         this.particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; });
         this.floatingTexts.forEach(ft => { ctx.fillStyle = ft.color; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(ft.text, ft.x, ft.y); });
+        
         if (this.selectionBox) {
           ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)'; ctx.fillStyle = 'rgba(59, 130, 246, 0.2)';
           let w = this.selectionBox.endX - this.selectionBox.startX, h = this.selectionBox.endY - this.selectionBox.startY;
@@ -428,14 +451,28 @@
       update() {}
       draw(ctx) {
         ctx.save(); ctx.translate(this.x, this.y);
+        
+        // 체력바 렌더링
         if (this.hp < this.maxHp) {
           ctx.fillStyle = '#ef4444'; ctx.fillRect(-this.radius, -this.radius-15, this.radius*2, 6);
           ctx.fillStyle = '#22c55e'; ctx.fillRect(-this.radius, -this.radius-15, (this.hp/this.maxHp)*this.radius*2, 6);
         }
+        
         ctx.fillStyle = this.color;
-        if (this.type === 'hq') ctx.fillRect(-40, -40, 80, 80);
-        else if (this.type === 'refinery') { ctx.beginPath(); ctx.moveTo(0,-30); ctx.lineTo(25,0); ctx.lineTo(0,30); ctx.lineTo(-25,0); ctx.fill(); }
-        else ctx.beginPath(); ctx.arc(0,0,this.radius,0,Math.PI*2); ctx.fill();
+        
+        // [버그 수정 완료] 중괄호를 넣어 각 건물별로 경로가 섞이지 않도록 수정
+        if (this.type === 'hq') {
+          ctx.fillRect(-40, -40, 80, 80);
+        } else if (this.type === 'refinery') { 
+          ctx.beginPath(); 
+          ctx.moveTo(0,-30); ctx.lineTo(25,0); ctx.lineTo(0,30); ctx.lineTo(-25,0); 
+          ctx.fill(); 
+        } else {
+          ctx.beginPath(); 
+          ctx.arc(0,0,this.radius,0,Math.PI*2); 
+          ctx.fill();
+        }
+        
         ctx.restore();
       }
     }
