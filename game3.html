@@ -72,10 +72,10 @@
                 </div>
             </div>
 
-            <div id="loading-overlay" class="absolute inset-0 bg-white/90 flex items-center justify-center z-[60] hidden">
+            <div id="loading-overlay" class="absolute inset-0 bg-white/90 flex items-center justify-center z-[60]">
                 <div class="text-center">
                     <i class="fas fa-circle-notch fa-spin text-5xl text-blue-500 mb-4"></i>
-                    <p class="text-gray-500 font-bold">연결 중...</p>
+                    <p class="text-gray-500 font-bold">서버 연결 중...</p>
                 </div>
             </div>
         </div>
@@ -84,7 +84,7 @@
         <div class="w-[300px] bg-gray-50 flex flex-col border-l border-gray-100">
             <div class="p-6 bg-white border-b border-gray-100">
                 <div class="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">현재 상태</div>
-                <div id="my-role-display" class="font-black text-2xl text-blue-500">대기 중</div>
+                <div id="my-role-display" class="font-black text-2xl text-blue-500">연결 대기</div>
             </div>
 
             <div class="flex-1 flex flex-col overflow-hidden">
@@ -103,10 +103,11 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, getDoc, serverTimestamp, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // --- Firebase 초기화 ---
         const firebaseConfig = JSON.parse(__firebase_config);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'tag-game-custom-v1';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'tag-game-multiplayer-final';
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -118,8 +119,8 @@
         let players = {};
         let gameState = { taggerId: null };
         let isGameStarted = false;
+        let isTaggerAssigning = false; // 중복 배정 방지 락
         
-        // 내 커스텀 정보
         let myProfile = {
             nickname: localStorage.getItem('tag_nickname') || '익명',
             color: '#3b82f6',
@@ -130,7 +131,7 @@
         const NORMAL_SPEED = 4.5;
         const TAGGER_SPEED = 5.2;
         
-        let myPos = { x: 700, y: 100 };
+        let myPos = { x: 720, y: 80 };
         const keys = { w: false, a: false, s: false, d: false };
 
         const obstacles = [
@@ -157,10 +158,11 @@
             onAuthStateChanged(auth, (userData) => {
                 if (userData) {
                     user = userData;
+                    document.getElementById('loading-overlay').classList.add('hidden');
                     listenToGameState();
                     listenToPlayers();
                     listenToChat();
-                    syncPresence();
+                    startSync();
                     requestAnimationFrame(gameLoop);
                 }
             });
@@ -192,7 +194,7 @@
             document.getElementById('lobby-screen').classList.add('hidden');
             document.getElementById('back-to-lobby').classList.remove('hidden');
             
-            // 시작 시 위치 초기화 (술래 여부에 따라 다름)
+            // 전장에 투입될 때 위치 초기화
             if (gameState.taggerId === user.uid) {
                 myPos = { x: 80, y: 620 };
             } else {
@@ -242,8 +244,9 @@
             return false;
         }
 
-        async function syncPresence() {
+        function startSync() {
             if (!user) return;
+            // 50ms마다 내 정보 업데이트
             setInterval(async () => {
                 const ref = doc(db, 'artifacts', appId, 'public', 'data', 'players', user.uid);
                 await setDoc(ref, {
@@ -266,16 +269,22 @@
                 const updated = {};
                 snapshot.docs.forEach(doc => {
                     const data = doc.data();
-                    if (now - data.lastSeen < 5000) updated[data.uid] = data;
+                    // 6초 이상 소식 없으면 오프라인 간주
+                    if (now - data.lastSeen < 6000) {
+                        updated[data.uid] = data;
+                    }
                 });
                 players = updated;
                 document.getElementById('player-count').innerText = `${Object.keys(players).length}명`;
                 
+                // 술래가 없거나 나갔다면 새로운 술래 선출 (가장 먼저 접속한 UID 기준)
                 if (Object.keys(players).length > 0 && (!gameState.taggerId || !players[gameState.taggerId])) {
-                    const sorted = Object.keys(players).sort();
-                    await assignTagger(sorted[0]);
+                    if (!isTaggerAssigning) {
+                        const sortedIds = Object.keys(players).sort();
+                        assignTagger(sortedIds[0]);
+                    }
                 }
-            });
+            }, (err) => console.error("Player List Error:", err));
         }
 
         function listenToGameState() {
@@ -285,39 +294,51 @@
                     const prevTagger = gameState.taggerId;
                     gameState = snapshot.data();
                     
-                    // 술래가 변경되었을 때 (나에게 잡힌 사람이 술래가 되었거나, 내가 잡혔을 때)
-                    if (prevTagger !== gameState.taggerId) {
-                        if (gameState.taggerId === user.uid) {
-                            // 내가 새로운 술래가 됨 -> 왼쪽 아래 스폰
-                            myPos = { x: 80, y: 620 };
-                        }
+                    // 술래가 나로 변경되었을 때 즉시 왼쪽 아래로 이동
+                    if (prevTagger !== gameState.taggerId && gameState.taggerId === user.uid) {
+                        myPos = { x: 80, y: 620 };
                     }
 
                     const isTagger = gameState.taggerId === user.uid;
                     const display = document.getElementById('my-role-display');
                     if (!isGameStarted) {
-                        display.innerText = "대기 중";
+                        display.innerText = "대기실 설정 중";
                         display.className = "font-black text-2xl text-gray-300";
                     } else {
                         display.innerText = isTagger ? "당신은 술래!" : "도망치세요!";
                         display.className = isTagger ? "font-black text-2xl text-red-500 animate-pulse" : "font-black text-2xl text-blue-500";
                     }
                 }
-            });
+            }, (err) => console.error("Game State Error:", err));
         }
 
         async function assignTagger(uid) {
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'status', 'current');
-            await setDoc(docRef, { taggerId: uid, lastTagTime: Date.now() });
+            if (isTaggerAssigning) return;
+            isTaggerAssigning = true;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'status', 'current');
+                await setDoc(docRef, { taggerId: uid, lastTagTime: Date.now() });
+            } catch (e) {
+                console.error("Assign Tagger Error:", e);
+            } finally {
+                setTimeout(() => { isTaggerAssigning = false; }, 1000); // 연속 배정 방지 쿨다운
+            }
         }
 
         async function checkTagCollision() {
+            // 내가 술래이고 게임 중일 때만 체크
             if (!user || !isGameStarted || gameState.taggerId !== user.uid) return;
+            
             for (let id in players) {
                 if (id === user.uid || !players[id].isActive) continue;
+                
                 const p = players[id];
-                const dist = Math.sqrt((myPos.x - p.x)**2 + (myPos.y - p.y)**2);
-                if (dist < 40) {
+                const dx = myPos.x - p.x;
+                const dy = myPos.y - p.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                // 충돌 판정 (두 플레이어 반지름 합보다 작을 때)
+                if (dist < 38) {
                     await assignTagger(id);
                     await sendSystemMessage(`${p.nickname} 플레이어가 술래가 되었습니다!`);
                     break;
@@ -328,22 +349,23 @@
         function listenToChat() {
             const chatCol = collection(db, 'artifacts', appId, 'public', 'data', 'chat');
             onSnapshot(chatCol, (snapshot) => {
-                const messages = snapshot.docs.map(doc => doc.data()).sort((a,b) => a.time - b.time);
+                // 실시간 동기화를 위해 전체 메시지를 읽어 시간순 정렬
+                const messages = snapshot.docs.map(doc => doc.data()).sort((a,b) => (a.time || 0) - (b.time || 0));
                 const chatBox = document.getElementById('chat-box');
                 chatBox.innerHTML = "";
-                messages.slice(-20).forEach(msg => {
+                messages.slice(-30).forEach(msg => {
                     const div = document.createElement('div');
                     if (msg.sender === 'SYSTEM') {
-                        div.className = "text-[11px] text-orange-400 font-bold text-center py-1";
+                        div.className = "text-[11px] text-orange-400 font-bold text-center py-1 bg-orange-50/50 rounded-lg";
                         div.innerText = `📢 ${msg.text}`;
                     } else {
-                        div.className = "bg-white p-3 rounded-2xl shadow-sm border border-gray-50";
-                        div.innerHTML = `<div class="text-[10px] font-black text-gray-300 mb-1">${msg.nickname}</div><div class="text-gray-700">${msg.text}</div>`;
+                        div.className = "bg-white p-3 rounded-2xl shadow-sm border border-gray-50 mb-1";
+                        div.innerHTML = `<div class="text-[10px] font-black text-gray-300 mb-0.5">${msg.nickname}</div><div class="text-gray-700 leading-tight">${msg.text}</div>`;
                     }
                     chatBox.appendChild(div);
                 });
                 chatBox.scrollTop = chatBox.scrollHeight;
-            });
+            }, (err) => console.error("Chat Error:", err));
         }
 
         async function sendChat() {
@@ -351,21 +373,25 @@
             const text = input.value.trim();
             if (!text || !user) return;
             input.value = "";
-            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
-                sender: user.uid, nickname: myProfile.nickname, text: text, time: Date.now()
-            });
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
+                    sender: user.uid, nickname: myProfile.nickname, text: text, time: Date.now()
+                });
+            } catch (e) { console.error("Send Chat Error:", e); }
         }
 
         async function sendSystemMessage(text) {
-            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
-                sender: 'SYSTEM', text: text, time: Date.now()
-            });
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
+                    sender: 'SYSTEM', text: text, time: Date.now()
+                });
+            } catch (e) { console.error("System Msg Error:", e); }
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // 지형
+            // 지형 그리기
             ctx.fillStyle = "#f8fafc";
             ctx.strokeStyle = "#f1f5f9";
             ctx.lineWidth = 2;
@@ -376,20 +402,16 @@
                 ctx.stroke();
             });
 
-            // 플레이어
+            // 플레이어 그리기
             for (let id in players) {
                 const p = players[id];
+                // 활성화되지 않은 플레이어는 그리지 않음 (로비에 있는 사람)
                 if (!p.isActive && id !== user.uid) continue;
                 if (id === user.uid && !isGameStarted) continue;
 
+                // 내 위치는 서버 지연 방지를 위해 로컬 좌표 사용
                 const drawPos = (id === user.uid) ? myPos : p;
                 const isTagger = gameState.taggerId === id;
-
-                // 닉네임
-                ctx.fillStyle = "#1e293b";
-                ctx.font = "bold 12px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText(p.nickname, drawPos.x, drawPos.y - 32);
 
                 // 그림자
                 ctx.beginPath();
@@ -398,16 +420,22 @@
                 ctx.fill();
 
                 // 몸체
-                ctx.fillStyle = isTagger ? "#ef4444" : p.color;
+                ctx.fillStyle = isTagger ? "#ef4444" : (p.color || '#3b82f6');
                 ctx.beginPath();
-                if (p.shape === 'circle') {
-                    ctx.arc(drawPos.x, drawPos.y, PLAYER_RADIUS, 0, Math.PI * 2);
-                } else {
+                if (p.shape === 'square') {
                     ctx.roundRect(drawPos.x - PLAYER_RADIUS, drawPos.y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2, 6);
+                } else {
+                    ctx.arc(drawPos.x, drawPos.y, PLAYER_RADIUS, 0, Math.PI * 2);
                 }
                 ctx.fill();
                 
-                // 술래 강조
+                // 닉네임
+                ctx.fillStyle = "#334155";
+                ctx.font = "bold 12px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText(p.nickname || "익명", drawPos.x, drawPos.y - 32);
+
+                // 술래 이펙트
                 if (isTagger) {
                     ctx.strokeStyle = "white";
                     ctx.lineWidth = 4;
